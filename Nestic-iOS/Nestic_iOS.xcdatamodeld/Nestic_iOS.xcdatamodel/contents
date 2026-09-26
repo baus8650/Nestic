@@ -1,9 +1,51 @@
 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<model type="com.apple.IDECoreDataModeler.DataModel" documentVersion="1.0" lastSavedToolsVersion="1" systemVersion="11A491" minimumToolsVersion="Automatic" sourceLanguage="Swift" usedWithCloudKit="false" userDefinedModelVersionIdentifier="">
+<model type="com.apple.IDECoreDataModeler.DataModel" documentVersion="1.0" lastSavedToolsVersion="24299" systemVersion="25D125" minimumToolsVersion="Automatic" sourceLanguage="Swift" userDefinedModelVersionIdentifier="">
+    <entity name="CDAction" representedClassName="CDAction" syncable="YES" codeGenerationType="class">
+        <attribute name="createdAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="id" attributeType="String" defaultValueString="action_id"/>
+        <attribute name="name" attributeType="String" defaultValueString="action_name"/>
+        <attribute name="nestId" attributeType="String" defaultValueString="nest_id"/>
+        <attribute name="unit" optional="YES" attributeType="String"/>
+        <attribute name="updatedAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="valueTypeRaw" attributeType="String" defaultValueString="value_type"/>
+    </entity>
+    <entity name="CDEntity" representedClassName="CDEntity" syncable="YES" codeGenerationType="class">
+        <attribute name="birthday" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="id" attributeType="String" defaultValueString="entity_id"/>
+        <attribute name="imageURL" optional="YES" attributeType="String"/>
+        <attribute name="kindRaw" attributeType="String" defaultValueString="pet"/>
+        <attribute name="name" attributeType="String" defaultValueString="Name"/>
+        <attribute name="nestId" attributeType="String" defaultValueString="nest_id"/>
+    </entity>
+    <entity name="CDLastEvent" representedClassName="CDLastEvent" syncable="YES" codeGenerationType="class">
+        <attribute name="actionId" attributeType="String" defaultValueString="action_id"/>
+        <attribute name="entityId" attributeType="String" defaultValueString="entity_id"/>
+        <attribute name="id" attributeType="String" defaultValueString="last_event_id"/>
+        <attribute name="nestId" attributeType="String" defaultValueString="nest_id"/>
+        <attribute name="note" optional="YES" attributeType="String"/>
+        <attribute name="occurredAt" attributeType="Date" defaultDateTimeInterval="793975620" usesScalarValueType="NO"/>
+        <attribute name="valueBool" optional="YES" attributeType="Boolean" usesScalarValueType="YES"/>
+        <attribute name="valueJSON" optional="YES" attributeType="String"/>
+        <attribute name="valueNumber" optional="YES" attributeType="Double" defaultValueString="0.0" usesScalarValueType="YES"/>
+        <attribute name="valueText" optional="YES" attributeType="String"/>
+    </entity>
+    <entity name="CDNest" representedClassName="CDNest" syncable="YES" codeGenerationType="class">
+        <attribute name="createdAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="id" attributeType="String" defaultValueString="new_id"/>
+        <attribute name="name" attributeType="String" defaultValueString="New Nest"/>
+        <attribute name="updatedAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+    </entity>
+    <entity name="CDPinnedAction" representedClassName="CDPinnedAction" syncable="YES" codeGenerationType="class">
+        <attribute name="actionId" attributeType="String" defaultValueString="action_id"/>
+        <attribute name="entityId" attributeType="String" defaultValueString="entity_id"/>
+        <attribute name="id" attributeType="String" defaultValueString="action_id"/>
+        <attribute name="name" attributeType="String" defaultValueString="Name"/>
+        <attribute name="nestId" attributeType="String" defaultValueString="nest_id"/>
+        <attribute name="sortOrder" attributeType="Integer 16" defaultValueString="1" usesScalarValueType="YES"/>
+        <attribute name="unit" optional="YES" attributeType="String"/>
+        <attribute name="valueTypeRaw" attributeType="String" defaultValueString="Quantity"/>
+    </entity>
     <entity name="Item" representedClassName="Item" syncable="YES" codeGenerationType="class">
         <attribute name="timestamp" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
     </entity>
-    <elements>
-        <element name="Item" positionX="-63" positionY="-18" width="128" height="44"/>
-    </elements>
 </model>

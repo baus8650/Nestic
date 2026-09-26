@@ -6,6 +6,11 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		221518E32F5319650088D4C0 /* NesticWidget.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 221518E42F5319650088D4C0 /* NesticWidget.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		221518E22F5319650088D4C0 /* NesticWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = 221518E52F5319650088D4C0 /* NesticWidget.swift */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXContainerItemProxy section */
 		221518C12F5319650088D4C0 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -21,12 +26,23 @@
 			remoteGlobalIDString = 221518AD2F5319630088D4C0;
 			remoteInfo = "Nestic-iOS";
 		};
+		221518E82F5319650088D4C0 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 221518A62F5319630088D4C0 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 221518EA2F5319650088D4C0;
+			remoteInfo = NesticWidget;
+		};
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
 		221518AE2F5319630088D4C0 /* Nestic-iOS.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Nestic-iOS.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		221518C02F5319650088D4C0 /* Nestic-iOSTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "Nestic-iOSTests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
 		221518CA2F5319650088D4C0 /* Nestic-iOSUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "Nestic-iOSUITests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
+		221518E42F5319650088D4C0 /* NesticWidget.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = NesticWidget.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		221518E52F5319650088D4C0 /* NesticWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NesticWidget.swift; sourceTree = "<group>"; };
+		221518E62F5319650088D4C0 /* NesticWidget.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = NesticWidget.entitlements; sourceTree = "<group>"; };
+		221518F22F5319650088D4C0 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -69,6 +85,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		221518E92F5319650088D4C0 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -78,6 +101,7 @@
 				221518B02F5319630088D4C0 /* Nestic-iOS */,
 				221518C32F5319650088D4C0 /* Nestic-iOSTests */,
 				221518CD2F5319650088D4C0 /* Nestic-iOSUITests */,
+				221518E72F5319650088D4C0 /* NesticWidget */,
 				221518AF2F5319630088D4C0 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -88,8 +112,19 @@
 				221518AE2F5319630088D4C0 /* Nestic-iOS.app */,
 				221518C02F5319650088D4C0 /* Nestic-iOSTests.xctest */,
 				221518CA2F5319650088D4C0 /* Nestic-iOSUITests.xctest */,
+				221518E42F5319650088D4C0 /* NesticWidget.appex */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		221518E72F5319650088D4C0 /* NesticWidget */ = {
+			isa = PBXGroup;
+			children = (
+				221518E52F5319650088D4C0 /* NesticWidget.swift */,
+				221518E62F5319650088D4C0 /* NesticWidget.entitlements */,
+				221518F22F5319650088D4C0 /* Info.plist */,
+			);
+			path = NesticWidget;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -102,10 +137,12 @@
 				221518AA2F5319630088D4C0 /* Sources */,
 				221518AB2F5319630088D4C0 /* Frameworks */,
 				221518AC2F5319630088D4C0 /* Resources */,
+				221518EB2F5319650088D4C0 /* Embed Foundation Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				221518EE2F5319650088D4C0 /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				221518B02F5319630088D4C0 /* Nestic-iOS */,
@@ -116,6 +153,25 @@
 			productName = "Nestic-iOS";
 			productReference = 221518AE2F5319630088D4C0 /* Nestic-iOS.app */;
 			productType = "com.apple.product-type.application";
+		};
+		221518EA2F5319650088D4C0 /* NesticWidget */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 221518F12F5319650088D4C0 /* Build configuration list for PBXNativeTarget "NesticWidget" */;
+			buildPhases = (
+				221518ED2F5319650088D4C0 /* Sources */,
+				221518E92F5319650088D4C0 /* Frameworks */,
+				221518EC2F5319650088D4C0 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = NesticWidget;
+			packageProductDependencies = (
+			);
+			productName = NesticWidget;
+			productReference = 221518E42F5319650088D4C0 /* NesticWidget.appex */;
+			productType = "com.apple.product-type.app-extension";
 		};
 		221518BF2F5319650088D4C0 /* Nestic-iOSTests */ = {
 			isa = PBXNativeTarget;
@@ -176,6 +232,9 @@
 					221518AD2F5319630088D4C0 = {
 						CreatedOnToolsVersion = 26.0.1;
 					};
+					221518EA2F5319650088D4C0 = {
+						CreatedOnToolsVersion = 26.0.1;
+					};
 					221518BF2F5319650088D4C0 = {
 						CreatedOnToolsVersion = 26.0.1;
 						TestTargetID = 221518AD2F5319630088D4C0;
@@ -201,6 +260,7 @@
 			projectRoot = "";
 			targets = (
 				221518AD2F5319630088D4C0 /* Nestic-iOS */,
+				221518EA2F5319650088D4C0 /* NesticWidget */,
 				221518BF2F5319650088D4C0 /* Nestic-iOSTests */,
 				221518C92F5319650088D4C0 /* Nestic-iOSUITests */,
 			);
@@ -223,6 +283,24 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 		221518C82F5319650088D4C0 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		221518EB2F5319650088D4C0 /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				221518E32F5319650088D4C0 /* NesticWidget.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		221518EC2F5319650088D4C0 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -253,6 +331,14 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		221518ED2F5319650088D4C0 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				221518E22F5319650088D4C0 /* NesticWidget.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
@@ -265,6 +351,11 @@
 			isa = PBXTargetDependency;
 			target = 221518AD2F5319630088D4C0 /* Nestic-iOS */;
 			targetProxy = 221518CB2F5319650088D4C0 /* PBXContainerItemProxy */;
+		};
+		221518EE2F5319650088D4C0 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 221518EA2F5319650088D4C0 /* NesticWidget */;
+			targetProxy = 221518E82F5319650088D4C0 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -322,7 +413,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
@@ -380,7 +471,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
@@ -396,10 +487,14 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
+				CODE_SIGN_ENTITLEMENTS = Nestic-iOS/Nestic-iOS.entitlements;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 89JNN3239D;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Configuration/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = Nestic;
+				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "Connect to your Nestic server on your local network.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -409,12 +504,13 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "com.bausch.Nestic-iOS";
+			MARKETING_VERSION = 1.0;
+			NESTIC_SERVER_URL = "http://127.0.0.1:8080";
+			PRODUCT_BUNDLE_IDENTIFIER = "com.bausch.Nestic-iOS";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
-				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = nonisolated;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
@@ -428,10 +524,14 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
+				CODE_SIGN_ENTITLEMENTS = Nestic-iOS/Nestic-iOS.entitlements;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 89JNN3239D;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Configuration/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = Nestic;
+				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "Connect to your Nestic server on your local network.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -441,12 +541,13 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "com.bausch.Nestic-iOS";
+			MARKETING_VERSION = 1.0;
+			NESTIC_SERVER_URL = "https://api.nestic-app.com";
+			PRODUCT_BUNDLE_IDENTIFIER = "com.bausch.Nestic-iOS";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
-				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = nonisolated;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
@@ -462,7 +563,8 @@
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 89JNN3239D;
 				GENERATE_INFOPLIST_FILE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				INFOPLIST_KEY_CFBundleDisplayName = Nestic;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = "com.bausch.Nestic-iOSTests";
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -484,7 +586,8 @@
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 89JNN3239D;
 				GENERATE_INFOPLIST_FILE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				INFOPLIST_KEY_CFBundleDisplayName = Nestic;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = "com.bausch.Nestic-iOSTests";
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -505,6 +608,7 @@
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 89JNN3239D;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = Nestic;
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = "com.bausch.Nestic-iOSUITests";
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -525,6 +629,7 @@
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 89JNN3239D;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = Nestic;
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = "com.bausch.Nestic-iOSUITests";
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -535,6 +640,58 @@
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
 				TEST_TARGET_NAME = "Nestic-iOS";
+			};
+			name = Release;
+		};
+		221518EF2F5319650088D4C0 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				CODE_SIGN_ENTITLEMENTS = NesticWidget/NesticWidget.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 89JNN3239D;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = NesticWidget/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "Nestic care";
+				INFOPLIST_KEY_NSExtension_NSExtensionPointIdentifier = "com.apple.widgetkit-extension";
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "com.bausch.Nestic-iOS.widget";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = nonisolated;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		221518F02F5319650088D4C0 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				CODE_SIGN_ENTITLEMENTS = NesticWidget/NesticWidget.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 89JNN3239D;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = NesticWidget/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "Nestic care";
+				INFOPLIST_KEY_NSExtension_NSExtensionPointIdentifier = "com.apple.widgetkit-extension";
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "com.bausch.Nestic-iOS.widget";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = nonisolated;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
 			};
 			name = Release;
 		};
@@ -573,6 +730,15 @@
 			buildConfigurations = (
 				221518DB2F5319650088D4C0 /* Debug */,
 				221518DC2F5319650088D4C0 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		221518F12F5319650088D4C0 /* Build configuration list for PBXNativeTarget "NesticWidget" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				221518EF2F5319650088D4C0 /* Debug */,
+				221518F02F5319650088D4C0 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
