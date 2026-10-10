@@ -2,35 +2,41 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<key>BGTaskSchedulerPermittedIdentifiers</key>
+	<array>
+		<string>com.bausch.Nestic-iOS.widget-refresh</string>
+	</array>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>com.bausch.Nestic-iOS</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>nestic</string>
+			</array>
+		</dict>
+	</array>
 	<key>NesticServerURL</key>
 	<string>$(NESTIC_SERVER_URL)</string>
-	<key>NSAppTransportSecurity</key>
+	<key>UIApplicationSceneManifest</key>
 	<dict>
-		<key>NSAllowsLocalNetworking</key>
+		<key>UIApplicationSupportsMultipleScenes</key>
 		<true/>
-		<key>NSExceptionDomains</key>
+		<key>UISceneConfigurations</key>
 		<dict>
-			<key>10.0.0.0/8</key>
-			<dict>
-				<key>NSExceptionAllowsInsecureHTTPLoads</key>
-				<true/>
-			</dict>
-			<key>127.0.0.1</key>
-			<dict>
-				<key>NSExceptionAllowsInsecureHTTPLoads</key>
-				<true/>
-			</dict>
-			<key>172.16.0.0/12</key>
-			<dict>
-				<key>NSExceptionAllowsInsecureHTTPLoads</key>
-				<true/>
-			</dict>
-			<key>192.168.0.0/16</key>
-			<dict>
-				<key>NSExceptionAllowsInsecureHTTPLoads</key>
-				<true/>
-			</dict>
+			<key>UIWindowSceneSessionRoleApplication</key>
+			<array>
+				<dict>
+					<key>UISceneConfigurationName</key>
+					<string>Default Configuration</string>
+				</dict>
+			</array>
 		</dict>
 	</dict>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>fetch</string>
+	</array>
 </dict>
 </plist>

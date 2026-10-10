@@ -12,11 +12,17 @@ final class NesticSubscriptionStore: ObservableObject {
     @Published var errorMessage: String?
 
     private var updatesTask: Task<Void, Never>?
+    private var storeKitEntitlement = false
+    private var manualProOverride = false
 
     init() {
         hasPredictionAccess = false
         updatesTask = Task { [weak self] in
-            for await _ in Transaction.updates {
+            for await result in Transaction.updates {
+                if case .verified(let transaction) = result,
+                   transaction.productID == Self.predictionProductID {
+                    await transaction.finish()
+                }
                 await self?.refreshEntitlement()
             }
         }
@@ -24,23 +30,38 @@ final class NesticSubscriptionStore: ObservableObject {
 
     deinit { updatesTask?.cancel() }
 
-    var priceDescription: String { product?.displayPrice ?? "$4.99/month" }
+    var priceDescription: String {
+        guard let product else { return "See subscription options" }
+        guard let period = product.subscription?.subscriptionPeriod else { return product.displayPrice }
+        let unit: String
+        switch period.unit {
+        case .day: unit = period.value == 1 ? "day" : "days"
+        case .week: unit = period.value == 1 ? "week" : "weeks"
+        case .month: unit = period.value == 1 ? "month" : "months"
+        case .year: unit = period.value == 1 ? "year" : "years"
+        @unknown default: return product.displayPrice
+        }
+        return "\(product.displayPrice) / \(period.value == 1 ? "" : "\(period.value) ")\(unit)"
+    }
 
     func load() async {
+        errorMessage = nil
         do {
             product = try await Product.products(for: [Self.predictionProductID]).first
             await refreshEntitlement()
+            if product == nil { errorMessage = "Subscriptions are temporarily unavailable. Please try again." }
         } catch {
-            errorMessage = "Predictions are not available for purchase yet."
+            errorMessage = "Couldn’t load subscriptions. Check your connection and try again."
         }
     }
 
     func purchase() async {
         guard let product else {
-            errorMessage = "The predictions subscription is still being configured."
+            errorMessage = "Subscriptions are temporarily unavailable. Please try again."
             return
         }
         isLoading = true
+        errorMessage = nil
         defer { isLoading = false }
         do {
             let result = try await product.purchase()
@@ -48,6 +69,8 @@ final class NesticSubscriptionStore: ObservableObject {
                 let transaction = try checkVerified(verification)
                 await transaction.finish()
                 await refreshEntitlement()
+            } else if case .pending = result {
+                errorMessage = "Your purchase is pending approval. Pro will unlock when the App Store confirms it."
             }
         } catch {
             errorMessage = error.localizedDescription
@@ -56,10 +79,12 @@ final class NesticSubscriptionStore: ObservableObject {
 
     func restorePurchases() async {
         isLoading = true
+        errorMessage = nil
         defer { isLoading = false }
         do {
             try await AppStore.sync()
             await refreshEntitlement()
+            if !hasPredictionAccess { errorMessage = "No active Nestic Pro subscription was found for this Apple account." }
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -71,6 +96,11 @@ final class NesticSubscriptionStore: ObservableObject {
         hasPredictionAccess = true
     }
 
+    func setManualProOverride(_ enabled: Bool) {
+        manualProOverride = enabled
+        hasPredictionAccess = storeKitEntitlement || manualProOverride
+    }
+
     private func refreshEntitlement() async {
         var entitled = false
         for await result in Transaction.currentEntitlements {
@@ -79,7 +109,8 @@ final class NesticSubscriptionStore: ObservableObject {
                 entitled = true
             }
         }
-        hasPredictionAccess = entitled
+        storeKitEntitlement = entitled
+        hasPredictionAccess = storeKitEntitlement || manualProOverride
     }
 
     private func checkVerified<T>(_ result: VerificationResult<T>) throws -> T {

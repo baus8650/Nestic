@@ -2,43 +2,241 @@ import SwiftUI
 
 struct NesticTabs: View {
     @EnvironmentObject private var store: NesticStore
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    @State private var selectedTab: NesticTab = .home
+    @State private var homePath = NavigationPath()
+    @State private var iPadPath = NavigationPath()
+    @State private var sidebarVisibility: NavigationSplitViewVisibility = .all
+    @State private var widgetLogSelection: LogSelection?
+    @State private var requestedSubjectModes: [UUID: SubjectDetailMode] = [:]
+
     var body: some View {
-        TabView {
-            NavigationStack { DashboardView() }.id(store.selectedNestID)
+        Group {
+            if horizontalSizeClass == .regular {
+                iPadLayout
+            } else {
+                phoneLayout
+            }
+        }
+        .tint(NesticTheme.forest)
+        .sheet(item: $widgetLogSelection) { LogEntrySheet(subject: $0.subject, tracker: $0.tracker, date: $0.date) }
+        .onAppear { applyPendingNavigation() }
+        .onChange(of: selectedTab) { _, _ in
+            homePath = NavigationPath()
+            iPadPath = NavigationPath()
+        }
+        .onChange(of: homePath) { _, path in
+            if path.isEmpty { requestedSubjectModes.removeAll() }
+        }
+        .onChange(of: iPadPath) { _, path in
+            if path.isEmpty { requestedSubjectModes.removeAll() }
+        }
+        .onChange(of: store.pendingNavigation) { _, _ in applyPendingNavigation() }
+        .onChange(of: store.subjects) { _, _ in applyPendingNavigation() }
+    }
+
+    private var phoneLayout: some View {
+        TabView(selection: tabSelection) {
+            homeNavigation
                 .tabItem { Label("Home", systemImage: "house.fill") }
-            NavigationStack { AnalyticsView() }.id(store.selectedNestID)
-                .tabItem { Label("Insights", systemImage: "chart.xyaxis.line") }
+                .tag(NesticTab.home)
             NavigationStack { ActivityView() }
                 .tabItem { Label("Activity", systemImage: "clock.arrow.circlepath") }
+                .tag(NesticTab.activity)
+            NavigationStack { ReportsView() }
+                .tabItem { Label("Reports", systemImage: "doc.text.magnifyingglass") }
+                .tag(NesticTab.reports)
             NavigationStack { NestSettingsView() }
                 .tabItem { Label("Your nest", systemImage: "person.2.fill") }
-        }.tint(NesticTheme.forest)
+                .tag(NesticTab.settings)
+        }
     }
+
+    private var iPadLayout: some View {
+        NavigationSplitView(columnVisibility: $sidebarVisibility) {
+            List(selection: sidebarSelection) {
+                Section("Nestic") {
+                    Label("Home", systemImage: "house.fill")
+                        .tag(NesticTab.home)
+                    Label("Activity", systemImage: "clock.arrow.circlepath")
+                        .tag(NesticTab.activity)
+                    Label("Reports", systemImage: "doc.text.magnifyingglass")
+                        .tag(NesticTab.reports)
+                    Label("Your nest", systemImage: "person.2.fill")
+                        .tag(NesticTab.settings)
+                        .accessibilityIdentifier("ipad.destination.settings")
+                }
+            }
+            .navigationTitle(store.selectedNest?.name ?? "Nestic")
+            .navigationBarTitleDisplayMode(.inline)
+            .navigationSplitViewColumnWidth(min: 200, ideal: 220, max: 260)
+        } detail: {
+            iPadDetail
+        }
+        .navigationSplitViewStyle(.balanced)
+    }
+
+    private var iPadDetail: some View {
+        NavigationStack(path: $iPadPath) {
+            selectedPadContent
+                .navigationBarTitleDisplayMode(.inline)
+                .navigationDestination(for: UUID.self) { subjectID in
+                    subjectDestination(for: subjectID)
+                }
+        }
+
+    }
+
+    @ViewBuilder
+    private var selectedPadContent: some View {
+        switch selectedTab {
+        case .home:
+            DashboardView()
+        case .activity:
+            ActivityView()
+        case .reports:
+            ReportsView()
+        case .settings:
+            NestSettingsView()
+        }
+    }
+
+    private var homeNavigation: some View {
+        NavigationStack(path: $homePath) {
+            DashboardView()
+                .navigationDestination(for: UUID.self) { subjectID in
+                    subjectDestination(for: subjectID)
+                }
+        }
+        .id(store.selectedNestID)
+    }
+
+    @ViewBuilder
+    private func subjectDestination(for subjectID: UUID) -> some View {
+        if let subject = store.subjects.first(where: { $0.id == subjectID }) {
+            SubjectDetailView(subject: subject, initialMode: requestedSubjectModes[subjectID] ?? .record)
+        } else {
+            ContentUnavailableView("Subject unavailable", systemImage: "person.crop.circle.badge.exclamationmark")
+        }
+    }
+
+    private var tabSelection: Binding<NesticTab> {
+        Binding(
+            get: { selectedTab },
+            set: selectTab
+        )
+    }
+
+    private var sidebarSelection: Binding<NesticTab?> {
+        Binding(
+            get: { selectedTab },
+            set: { tab in
+                guard let tab else { return }
+                selectTab(tab)
+            }
+        )
+    }
+
+    private func selectTab(_ tab: NesticTab) {
+        homePath = NavigationPath()
+        iPadPath = NavigationPath()
+        selectedTab = tab
+    }
+
+    private func applyPendingNavigation() {
+        guard let destination = store.pendingNavigation else { return }
+        let subjectID: UUID
+        switch destination {
+        case .subject(let id), .insights(let id): subjectID = id
+        case .record(let id, _): subjectID = id
+        }
+        guard store.subjects.contains(where: { $0.id == subjectID }) else { return }
+        guard let destination = store.consumePendingNavigation() else { return }
+
+        switch destination {
+        case .subject(let id):
+            openSubject(id, mode: .record)
+        case .insights(let id):
+            openSubject(id, mode: .insights)
+        case .record(let id, let trackerID):
+            guard let subject = store.subjects.first(where: { $0.id == id }),
+                  let tracker = store.trackers(for: subject).first(where: { $0.id == trackerID }) else { return }
+            widgetLogSelection = LogSelection(subject: subject, tracker: tracker)
+        }
+    }
+
+    private func openSubject(_ id: UUID, mode: SubjectDetailMode) {
+        homePath = NavigationPath()
+        iPadPath = NavigationPath()
+        requestedSubjectModes[id] = mode
+        selectedTab = .home
+        Task { @MainActor in
+            await Task.yield()
+            if horizontalSizeClass == .regular {
+                iPadPath.append(id)
+            } else {
+                homePath.append(id)
+            }
+        }
+    }
+}
+
+private enum NesticTab: Hashable {
+    case home, activity, reports, settings
 }
 
 struct DashboardView: View {
     @EnvironmentObject private var store: NesticStore
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    @State private var showTutorial = false
+    @AppStorage(NesticOnboarding.tutorialViewedKey) private var tutorialViewed = false
     @State private var showNests = false
     @State private var showAdd = false
-    @State private var filter: NestSubjectKind?
+    @State private var subjectFilter: NestSubjectKind?
     @State private var logSelection: LogSelection?
     @State private var error: String?
+    @State private var quickLogError: String?
+    @State private var quickLogDate: Date?
+    @State private var quickLogSubjectID: UUID?
+    @State private var showRoutineEditor = false
+    @State private var editingRoutine: NestRoutine?
+    @State private var deletingRoutine: NestRoutine?
+    @State private var routineBusyID: UUID?
+    @State private var routineError: String?
 
-    private var filteredSubjects: [NestSubject] {
-        store.subjects.filter { filter == nil || $0.kind == filter || (filter == .thing && $0.kind == .custom) }
+    private func offerTutorial() {
+        guard store.isAuthenticated, store.careLinkSession == nil, !tutorialViewed else { return }
+        if store.isDemo {
+            #if DEBUG
+            let arguments = ProcessInfo.processInfo.arguments
+            guard arguments.contains("--reset-tutorial") || arguments.contains("--show-tutorial-in-demo") else { return }
+            #else
+            return
+            #endif
+        }
+        showTutorial = true
     }
+
     private var todayCount: Int { store.entries.filter { Calendar.current.isDateInToday($0.occurredAt) }.count }
+    private var isWideLayout: Bool { horizontalSizeClass == .regular }
+    private var subjectGridColumns: [GridItem] {
+        let count = isWideLayout ? 3 : 2
+        return Array(repeating: GridItem(.flexible(), spacing: isWideLayout ? 16 : 12), count: count)
+    }
+    private var filteredSubjects: [NestSubject] {
+        store.subjects.filter { subject in
+            subjectFilter == nil || subject.kind == subjectFilter || (subjectFilter == .thing && subject.kind == .custom)
+        }
+    }
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 26) {
+            VStack(alignment: .leading, spacing: 20) {
                 header
-                if store.isDemo {
-                    HStack(spacing: 7) {
-                        Image(systemName: "sparkles")
-                        Text("Sample nest · saved on this device")
-                    }.font(.caption.weight(.medium)).foregroundStyle(NesticTheme.forest)
-                }
+                Text("Keep track of your nest.")
+                    .font(.subheadline)
+                    .foregroundStyle(NesticTheme.forest.opacity(0.75))
+                    .accessibilityIdentifier("home.slogan")
                 if let message = store.errorMessage {
                     HStack(alignment: .top) {
                         Image(systemName: "wifi.exclamationmark")
@@ -48,63 +246,57 @@ struct DashboardView: View {
                             .accessibilityLabel("Dismiss connection message")
                     }.padding(14).background(Color.orange.opacity(0.12), in: RoundedRectangle(cornerRadius: 16))
                 }
-                hero
+                summary
+                NesticSetupChecklist(createNest: { showNests = true }, addSubject: { showAdd = true }, tutorial: { showTutorial = true })
                 if store.selectedNest == nil {
                     VStack {
                         EmptyNestView(symbol: "person.2.badge.plus", title: "Make room for your people", message: "Create your first nest, or ask a nest owner to add your account by email.")
                         PrimaryButton(title: "Create a nest", symbol: "plus") { showNests = true }
                     }.nesticCard()
                 } else {
-                    VStack(spacing: 16) {
-                        HStack {
-                            SectionHeading(title: "Around your nest", detail: "\(store.subjects.count) tracking")
-                            if store.canManageNest {
-                                Button { showAdd = true } label: {
-                                    Image(systemName: "plus").font(.system(size: 14, weight: .semibold))
-                                        .frame(width: 32, height: 32).background(NesticTheme.forest.opacity(0.08), in: Circle())
-                                }.accessibilityLabel("Add something to track").accessibilityIdentifier("home.addSubject")
-                            }
-                        }
-                        filters
-                        if filteredSubjects.isEmpty {
-                            EmptyNestView(symbol: "leaf", title: store.subjects.isEmpty ? "A little care starts here" : "Nothing here just yet", message: "Add a pet, a person, or something at home. Then choose the little things you want to keep track of.")
-                            if store.canManageNest {
-                                Button("Add something to track") { showAdd = true }.font(.subheadline.weight(.semibold))
-                            }
-                        }
-                        ForEach(filteredSubjects) { subject in
-                            SubjectCard(subject: subject) { tracker in logSelection = LogSelection(subject: subject, tracker: tracker) }
-                        }
+                    quickLog
+                    if store.hasRoutineAccess {
+                        routinesSection
                     }
-                    VStack(spacing: 16) {
-                        SectionHeading(title: "The latest little things", detail: "RECENT ACTIVITY")
-                        if store.entries.isEmpty {
-                            Text("Your first update will appear here. Everyone in your nest can follow along.")
-                                .font(.subheadline).foregroundStyle(.secondary).frame(maxWidth: .infinity, alignment: .leading).nesticCard()
-                        } else {
-                            VStack(spacing: 0) {
-                                ForEach(Array(store.entries.prefix(4).enumerated()), id: \.element.id) { index, entry in
-                                    EntryRow(entry: entry)
-                                    if index < min(store.entries.count, 4) - 1 { Divider().padding(.leading, 52).padding(.vertical, 12) }
-                                }
-                            }.nesticCard()
-                        }
-                    }
+                    latest
                 }
-                HStack(spacing: 6) {
-                    NestMark().frame(width: 19, height: 20)
-                    Text("Little updates. Shared care.").font(.caption).foregroundStyle(.secondary)
-                }.frame(maxWidth: .infinity).padding(.vertical, 10)
-            }.padding(22).padding(.bottom, 12)
+            }
+            .frame(maxWidth: isWideLayout ? 1240 : .infinity)
+            .frame(maxWidth: .infinity)
+            .padding(.horizontal, isWideLayout ? 34 : 22)
+            .padding(.top, isWideLayout ? 28 : 22)
+            .padding(.bottom, 12)
         }
-        .background(NesticTheme.paper).toolbar(.hidden, for: .navigationBar)
+        .background(NesticTheme.paper)
+        .toolbar(isWideLayout ? .visible : .hidden, for: .navigationBar)
         .refreshable { do { try await store.refresh() } catch { self.error = error.localizedDescription } }
+        .task {
+            // Let the sign-in sheet finish dismissing before presenting the guide.
+            do { try await Task.sleep(for: .milliseconds(500)) } catch { return }
+            offerTutorial()
+        }
+        .sheet(isPresented: $showTutorial) { NesticTutorialView() }
         .sheet(isPresented: $showNests) { NestSwitcherSheet() }
         .sheet(isPresented: $showAdd) { AddSubjectSheet() }
+        .sheet(isPresented: $showRoutineEditor, onDismiss: { editingRoutine = nil }) {
+            RoutineEditorSheet(routine: editingRoutine)
+        }
         .sheet(item: $logSelection) { LogEntrySheet(subject: $0.subject, tracker: $0.tracker, date: $0.date) }
         .alert("Couldn’t refresh", isPresented: Binding(get: { error != nil }, set: { if !$0 { error = nil } })) {
             Button("OK") { error = nil }
         } message: { Text(error ?? "") }
+        .alert("Couldn’t record update", isPresented: Binding(get: { quickLogError != nil }, set: { if !$0 { quickLogError = nil } })) {
+            Button("OK") { quickLogError = nil }
+        } message: { Text(quickLogError ?? "") }
+        .alert("Couldn’t update routine", isPresented: Binding(get: { routineError != nil }, set: { if !$0 { routineError = nil } })) {
+            Button("OK") { routineError = nil }
+        } message: { Text(routineError ?? "") }
+        .confirmationDialog("Delete this routine?", item: $deletingRoutine) { routine in
+            Button("Delete routine", role: .destructive) { deleteRoutine(routine) }
+            Button("Cancel", role: .cancel) { }
+        } message: { routine in
+            Text(routine.isPrivate ? "This removes \(routine.name) from your devices." : "This removes \(routine.name) for everyone in the nest.")
+        }
     }
     private var header: some View {
         HStack(alignment: .center) {
@@ -122,57 +314,332 @@ struct DashboardView: View {
             }.accessibilityIdentifier("home.switchNest")
         }
     }
-    private var hero: some View {
-        VStack(alignment: .leading, spacing: 21) {
-            HStack {
-                Text(Date.now.formatted(.dateTime.weekday(.wide).month(.abbreviated).day()).uppercased())
-                    .font(.system(size: 10, weight: .semibold)).tracking(1.3)
-                Spacer()
-                HStack(spacing: 5) {
-                    Circle().fill(NesticTheme.lime).frame(width: 5, height: 5)
-                    Text(store.isDemo ? "SAMPLE" : store.connectionStatus.uppercased())
-                        .lineLimit(1).font(.system(size: 9, weight: .bold)).tracking(0.7)
+    private var summary: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            HStack(alignment: .top) {
+                VStack(alignment: .leading, spacing: 5) {
+                    Text(Date.now.formatted(.dateTime.weekday(.wide).month(.abbreviated).day()))
+                        .font(.caption.weight(.semibold)).foregroundStyle(.white.opacity(0.7))
+                    Text(store.selectedNest?.name ?? "Your nest")
+                        .font(.system(.title2, design: .rounded, weight: .bold)).foregroundStyle(.white)
                 }
-            }.foregroundStyle(.white.opacity(0.74))
-            HStack(alignment: .center) {
-                Text("A little more\ntogether.")
-                    .font(.system(size: 34, weight: .semibold, design: .rounded)).tracking(-1.1)
-                    .foregroundStyle(.white).fixedSize(horizontal: false, vertical: true)
-                Spacer(minLength: 5)
-                NestMark(color: NesticTheme.lime).frame(width: 78, height: 78).rotationEffect(.degrees(-8))
-            }
-            Rectangle().fill(.white.opacity(0.15)).frame(height: 1)
-            HStack(spacing: 6) {
-                Text("\(todayCount)").font(.system(.title2, design: .rounded, weight: .semibold)).foregroundStyle(NesticTheme.lime)
-                Text(todayCount == 1 ? "update today" : "updates today").font(.caption).foregroundStyle(.white.opacity(0.8))
                 Spacer()
-                HStack(spacing: -7) {
-                    ForEach(Array(store.members.prefix(3))) { person in
-                        Text(person.initials).font(.system(size: 10, weight: .bold))
-                            .foregroundStyle(NesticTheme.deepForest).frame(width: 30, height: 30)
-                            .background(NesticTheme.lime, in: Circle())
-                            .overlay(Circle().stroke(NesticTheme.deepForest, lineWidth: 2))
-                    }
-                }.accessibilityLabel("\(store.members.count) nest members")
+                NestMark(color: NesticTheme.lime).frame(width: 48, height: 48)
             }
-        }.padding(23).background(NesticTheme.deepForest, in: RoundedRectangle(cornerRadius: 28))
+            HStack(spacing: 8) {
+                HomeStat(value: "\(todayCount)", label: todayCount == 1 ? "update today" : "updates today")
+                HomeStat(value: "\(store.subjects.count)", label: "tracked items")
+                HomeStat(value: "\(store.members.count)", label: store.members.count == 1 ? "member" : "members")
+            }
+        }.padding(18).background(NesticTheme.deepForest, in: RoundedRectangle(cornerRadius: 24))
     }
+    private var quickLog: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                SectionHeading(title: "In your nest", detail: "TAP TO OPEN · HOLD TO CHOOSE & LOG")
+                Spacer()
+                if store.canManageNest {
+                    Button { showAdd = true } label: {
+                        Image(systemName: "plus").font(.system(size: 14, weight: .semibold))
+                            .frame(width: 32, height: 32).background(NesticTheme.forest.opacity(0.08), in: Circle())
+                    }.accessibilityLabel("Add something to track").accessibilityIdentifier("home.addSubject")
+                }
+            }
+            if store.subjects.isEmpty {
+                EmptyNestView(symbol: "leaf", title: "Your event history starts here", message: "Add a pet, a person, or something at home, then choose what you want to keep track of.")
+                if store.canManageNest {
+                    Button("Add something to track") { showAdd = true }.font(.subheadline.weight(.semibold))
+                }
+            } else if filteredSubjects.isEmpty {
+                filters
+                EmptyNestView(symbol: "line.3.horizontal.decrease.circle", title: "Nothing here just yet", message: "Try another filter or add something new to your nest.")
+                if store.canManageNest {
+                    Button("Add something to track") { showAdd = true }.font(.subheadline.weight(.semibold))
+                }
+            } else {
+                filters
+                    LazyVGrid(columns: subjectGridColumns, spacing: isWideLayout ? 16 : 12) {
+                    ForEach(filteredSubjects) { subject in
+                        NavigationLink(value: subject.id) {
+                            SubjectGridTile(subject: subject, isBusy: quickLogSubjectID == subject.id)
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityIdentifier("subject.open.\(subject.name)")
+                        .accessibilityHint("Tap to open details. Long press to choose what to record")
+                        .simultaneousGesture(LongPressGesture(minimumDuration: 0.55).onEnded { _ in
+                            quickLogDate = Date()
+                        })
+                        .contextMenu {
+                            ForEach(store.trackers(for: subject)) { tracker in
+                                Button {
+                                    let date = quickLogDate ?? Date()
+                                    quickLogDate = nil
+                                    quickLog(subject, tracker: tracker, date: date)
+                                } label: {
+                                    Text(tracker.name)
+                                }
+                                .accessibilityIdentifier("quicklog.\(subject.name).\(tracker.name)")
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var routinesSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                SectionHeading(title: "Routines", detail: "ONE TAP · MULTIPLE UPDATES")
+                Spacer()
+                if store.canLog {
+                    Button { editingRoutine = nil; showRoutineEditor = true } label: {
+                        Image(systemName: "plus")
+                            .font(.system(size: 14, weight: .semibold))
+                            .frame(width: 32, height: 32)
+                            .background(NesticTheme.forest.opacity(0.08), in: Circle())
+                    }
+                    .accessibilityLabel("Create a nest routine")
+                }
+            }
+            if store.routines.isEmpty {
+                Text(store.canManageNest
+                     ? "Bundle a meal, medications, or updates for several entities into one tap."
+                     : "No routines have been set up in this nest yet.")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .nesticCard()
+                if store.canLog {
+                    Button { editingRoutine = nil; showRoutineEditor = true } label: {
+                        Label("Create a nest routine", systemImage: "square.stack.3d.up.fill")
+                            .font(.subheadline.weight(.semibold))
+                            .frame(maxWidth: .infinity)
+                            .padding()
+                    }
+                }
+            } else {
+                ForEach(store.routines) { routine in
+                    nestRoutineRow(routine)
+                }
+            }
+        }
+    }
+
+    private func nestRoutineRow(_ routine: NestRoutine) -> some View {
+        HStack(spacing: 10) {
+            Button { logRoutine(routine) } label: {
+                HStack(spacing: 13) {
+                    Image(systemName: "play.circle.fill")
+                        .font(.title2)
+                        .foregroundStyle(NesticTheme.forest)
+                    VStack(alignment: .leading, spacing: 5) {
+                        Text("Log \(routine.name)")
+                            .font(.headline)
+                            .foregroundStyle(NesticTheme.ink)
+                        Text(routineSummary(routine))
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(2)
+                    }
+                    Spacer(minLength: 4)
+                    if routineBusyID == routine.id {
+                        ProgressView().tint(NesticTheme.forest)
+                    } else {
+                        Image(systemName: "arrow.right")
+                            .font(.caption.weight(.bold))
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
+            .buttonStyle(.plain)
+            .disabled(routineBusyID != nil)
+            .accessibilityLabel("Log \(routine.name)")
+            if store.canManageNest || (store.canLog && routine.isPrivate && routine.privateOwnerId == store.currentUser?.id) {
+                Menu {
+                    Button("Edit routine", systemImage: "pencil") {
+                        editingRoutine = routine
+                        showRoutineEditor = true
+                    }
+                    Button("Delete routine", systemImage: "trash", role: .destructive) {
+                        deletingRoutine = routine
+                    }
+                } label: {
+                    Image(systemName: "ellipsis.circle")
+                        .font(.title3)
+                        .foregroundStyle(.secondary)
+                        .frame(width: 34, height: 44)
+                }
+                .accessibilityLabel("Manage \(routine.name)")
+            }
+        }
+        .nesticCard()
+    }
+
+    private func routineSummary(_ routine: NestRoutine) -> String {
+        routine.targets.compactMap { target in
+            guard let subject = store.subjects.first(where: { $0.id == target.entityID }) else { return nil }
+            let trackerNames = target.items.compactMap { item in
+                store.trackers.first(where: { $0.id == item.trackerID })?.name
+            }.joined(separator: " · ")
+            return "\(subject.name): \(trackerNames)"
+        }.joined(separator: "  •  ")
+    }
+
+    private func logRoutine(_ routine: NestRoutine) {
+        routineBusyID = routine.id
+        Task {
+            defer { routineBusyID = nil }
+            do {
+                try await store.logRoutine(routine)
+                UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            } catch { routineError = error.localizedDescription }
+        }
+    }
+
+    private func deleteRoutine(_ routine: NestRoutine) {
+        Task {
+            do { try await store.deleteRoutine(routine) }
+            catch { routineError = error.localizedDescription }
+        }
+    }
+
     private var filters: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
                 filterButton("Everything", kind: nil)
                 filterButton("Pets", kind: .pet)
                 filterButton("People", kind: .person)
-                filterButton("Home & more", kind: .thing)
+                filterButton("Other", kind: .thing)
+            }
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Filter nest items")
+    }
+
+    private func filterButton(_ title: String, kind: NestSubjectKind?) -> some View {
+        Button {
+            withAnimation(.easeInOut(duration: 0.15)) { subjectFilter = kind }
+        } label: {
+            Text(title)
+                .font(.caption.weight(.semibold))
+                .padding(.horizontal, 15)
+                .padding(.vertical, 10)
+                .foregroundStyle(subjectFilter == kind ? NesticTheme.paper : NesticTheme.ink.opacity(0.65))
+                .background(subjectFilter == kind ? NesticTheme.forest : NesticTheme.card, in: Capsule())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Filter by \(title)")
+        .accessibilityAddTraits(subjectFilter == kind ? .isSelected : [])
+        .accessibilityIdentifier("home.filter.\(kind?.rawValue ?? "all")")
+    }
+
+    private func quickLog(_ subject: NestSubject, tracker: NestTracker, date: Date) {
+        if tracker.valueType != .none {
+            logSelection = LogSelection(subject: subject, tracker: tracker, date: date)
+            return
+        }
+        Task {
+            quickLogSubjectID = subject.id
+            defer { quickLogSubjectID = nil }
+            do {
+                try await store.log(subjectID: subject.id, trackerID: tracker.id, date: date)
+                UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            } catch {
+                quickLogError = error.localizedDescription
             }
         }
     }
-    private func filterButton(_ title: String, kind: NestSubjectKind?) -> some View {
-        Button { withAnimation(.easeInOut(duration: 0.15)) { filter = kind } } label: {
-            Text(title).font(.caption.weight(.semibold)).padding(.horizontal, 15).padding(.vertical, 10)
-                .foregroundStyle(filter == kind ? NesticTheme.paper : NesticTheme.ink.opacity(0.65))
-                .background(filter == kind ? NesticTheme.forest : NesticTheme.card, in: Capsule())
+    private var latest: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            SectionHeading(title: "Latest", detail: "SHARED ACTIVITY")
+            if store.entries.isEmpty {
+                Text("Your first update will appear here. Everyone in your nest can follow along.")
+                    .font(.subheadline).foregroundStyle(.secondary).frame(maxWidth: .infinity, alignment: .leading).nesticCard()
+            } else {
+                VStack(spacing: 0) {
+                    ForEach(Array(store.entries.prefix(3).enumerated()), id: \.element.id) { index, entry in
+                        EntryRow(entry: entry)
+                        if index < min(store.entries.count, 3) - 1 { Divider().padding(.leading, 52).padding(.vertical, 10) }
+                    }
+                }.nesticCard()
+            }
         }
+    }
+}
+
+private struct HomeStat: View {
+    let value: String
+    let label: String
+    var body: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(value).font(.system(.title3, design: .rounded, weight: .bold)).foregroundStyle(NesticTheme.lime)
+            Text(label).font(.caption2).foregroundStyle(.white.opacity(0.72)).lineLimit(1)
+        }.frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+private struct SubjectGridTile: View {
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    let subject: NestSubject
+    var isBusy = false
+
+    private var tileHeight: CGFloat { horizontalSizeClass == .regular ? 190 : 154 }
+
+    var body: some View {
+        GeometryReader { proxy in
+            ZStack(alignment: .bottomLeading) {
+                if let image = SubjectPhoto.image(from: subject.photoData) {
+                    Image(uiImage: image)
+                        .resizable()
+                        .scaledToFill()
+                        .frame(width: proxy.size.width, height: proxy.size.height)
+                        .clipped()
+                } else {
+                    NesticTheme.lime.opacity(0.22)
+                    Text(subject.emoji)
+                        .font(.system(size: 72))
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                }
+
+                LinearGradient(
+                    colors: [.clear, .black.opacity(0.78)],
+                    startPoint: .center,
+                    endPoint: .bottom
+                )
+
+                Text(subject.name)
+                    .font(.system(.headline, design: .rounded, weight: .bold))
+                    .foregroundStyle(.white)
+                    .lineLimit(1)
+                    .shadow(color: .black.opacity(0.35), radius: 3, y: 1)
+                    .padding(14)
+
+                if isBusy {
+                    ZStack {
+                        Rectangle()
+                            .fill(.black.opacity(0.42))
+                        ProgressView("Saving…")
+                            .font(.caption.weight(.semibold))
+                            .tint(.white)
+                            .foregroundStyle(.white)
+                    }
+                    .frame(width: proxy.size.width, height: proxy.size.height)
+                }
+            }
+            .frame(width: proxy.size.width, height: proxy.size.height)
+            .clipShape(RoundedRectangle(cornerRadius: 20))
+            .overlay {
+                RoundedRectangle(cornerRadius: 20)
+                    .stroke(.white.opacity(0.16), lineWidth: 1)
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .frame(height: tileHeight)
+        .background(NesticTheme.card)
+        .clipShape(RoundedRectangle(cornerRadius: 20))
+        .contentShape(RoundedRectangle(cornerRadius: 20))
     }
 }
 
@@ -190,65 +657,18 @@ struct LogSelection: Identifiable {
     }
 }
 
-struct SubjectCard: View {
-    @EnvironmentObject private var store: NesticStore
-    let subject: NestSubject
-    var log: (NestTracker) -> Void
-    var body: some View {
-        VStack(alignment: .leading, spacing: 17) {
-            NavigationLink {
-                SubjectDetailView(subject: subject)
-            } label: {
-                HStack(spacing: 13) {
-                    SubjectAvatar(emoji: subject.emoji)
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(subject.name).font(.system(.title3, design: .rounded, weight: .bold)).foregroundStyle(NesticTheme.ink)
-                        Text("\(store.trackers(for: subject).count) trackers · \(subject.kind.title)").font(.caption).foregroundStyle(.secondary)
-                    }
-                    Spacer()
-                    Image(systemName: "arrow.up.right").font(.subheadline).foregroundStyle(NesticTheme.forest)
-                }.contentShape(Rectangle())
-            }.buttonStyle(.plain).accessibilityIdentifier("subject.open.\(subject.name)")
-            if store.trackers(for: subject).isEmpty {
-                Text("Open to add your first tracker.").font(.caption).foregroundStyle(.secondary)
-            } else {
-                VStack(spacing: 0) {
-                    ForEach(Array(store.trackers(for: subject).prefix(4).enumerated()), id: \.element.id) { index, tracker in
-                        if index > 0 { Divider().padding(.vertical, 9) }
-                        Button { log(tracker) } label: {
-                            HStack(spacing: 10) {
-                                Image(systemName: trackerSymbol(tracker)).font(.system(size: 13)).foregroundStyle(NesticTheme.forest).frame(width: 20)
-                                Text(tracker.name).font(.subheadline.weight(.medium)).foregroundStyle(NesticTheme.ink)
-                                Spacer(minLength: 5)
-                                if let last = store.latestEntry(for: tracker, subject: subject) {
-                                    Text(last.occurredAt, format: .relative(presentation: .numeric, unitsStyle: .abbreviated)).font(.caption).foregroundStyle(.secondary).lineLimit(1)
-                                } else {
-                                    Text("No updates yet").font(.caption).foregroundStyle(.secondary)
-                                }
-                                Image(systemName: "plus").font(.system(size: 10, weight: .bold))
-                                    .frame(width: 26, height: 26).background(NesticTheme.forest.opacity(0.07), in: Circle())
-                            }.contentShape(Rectangle())
-                        }.buttonStyle(.plain).accessibilityLabel("Quick log \(tracker.name) for \(subject.name)")
-                            .accessibilityIdentifier("quicklog.\(subject.name).\(tracker.name)")
-                    }
-                }
-            }
-        }.nesticCard()
-    }
-}
-
 struct EntryRow: View {
     @EnvironmentObject private var store: NesticStore
     let entry: NestEntry
-    private var subject: NestSubject? { store.subjects.first { $0.id == entry.entityId } }
-    private var tracker: NestTracker? { store.trackers.first { $0.id == entry.actionId } }
+    private var subject: NestSubject? { store.subject(id: entry.entityId) }
+    private var tracker: NestTracker? { store.tracker(id: entry.actionId) }
     private var actor: String {
         if entry.actorUserId == store.currentUser?.id { return "You" }
         return store.members.first { $0.id == entry.actorUserId }?.displayName ?? "A nest member"
     }
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
-            SubjectAvatar(emoji: subject?.emoji ?? "🌱", size: 40)
+            SubjectAvatar(emoji: subject?.emoji ?? "🌱", photoData: subject?.photoData, size: 40)
             VStack(alignment: .leading, spacing: 5) {
                 HStack(alignment: .firstTextBaseline) {
                     Text("\(subject?.name ?? "Item") · \(tracker?.name ?? "Update")")
@@ -256,8 +676,24 @@ struct EntryRow: View {
                     Spacer(minLength: 4)
                     Text(entry.occurredAt, style: .time).font(.caption2).foregroundStyle(.secondary)
                 }
-                let value = entry.displayValue(unit: tracker?.unit)
-                if !value.isEmpty { Text(value).font(.subheadline).foregroundStyle(NesticTheme.forest) }
+                let value = entry.displayValue(unit: tracker?.unit, trackerName: tracker?.name)
+                if tracker?.valueType == .photo || (tracker?.valueType == .health && entry.photoURL != nil) {
+                    NesticEntryPhotoView(entry: entry, size: 78)
+                }
+                if tracker?.valueType == .health {
+                    if let resolvedAt = entry.resolvedAt {
+                        Label("Resolved \(resolvedAt.formatted(date: .abbreviated, time: .shortened))", systemImage: "checkmark.circle.fill")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(NesticTheme.forest)
+                    } else {
+                        Label("Open since onset", systemImage: "exclamationmark.circle.fill")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.orange)
+                    }
+                    if !value.isEmpty { Text(value).font(.subheadline).foregroundStyle(NesticTheme.ink) }
+                } else if tracker?.valueType != .photo, !value.isEmpty {
+                    Text(value).font(.subheadline).foregroundStyle(NesticTheme.forest)
+                }
                 if let note = entry.note, !note.isEmpty { Text(note).font(.caption).foregroundStyle(.secondary) }
                 Text("\(actor) logged this").font(.caption2).foregroundStyle(.secondary)
             }

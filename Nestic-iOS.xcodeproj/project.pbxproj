@@ -7,8 +7,14 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		221518E32F5319650088D4C0 /* NesticWidget.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 221518E42F5319650088D4C0 /* NesticWidget.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		221518E22F5319650088D4C0 /* NesticWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = 221518E52F5319650088D4C0 /* NesticWidget.swift */; };
+		221518E32F5319650088D4C0 /* NesticWidget.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 221518E42F5319650088D4C0 /* NesticWidget.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		A10000012F5319650088D4C0 /* NesticWatch.app in Embed Watch Content */ = {isa = PBXBuildFile; fileRef = A10000102F5319650088D4C0 /* NesticWatch.app */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		A10000032F5319650088D4C0 /* Nestic-iOS/AppCore/NestModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000122F5319650088D4C0 /* Nestic-iOS/AppCore/NestModels.swift */; };
+		A10000042F5319650088D4C0 /* Nestic-iOS/AppCore/NestAPI.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000132F5319650088D4C0 /* Nestic-iOS/AppCore/NestAPI.swift */; };
+		A10000052F5319650088D4C0 /* Nestic-iOS/AppCore/NesticWatchShared.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000142F5319650088D4C0 /* Nestic-iOS/AppCore/NesticWatchShared.swift */; };
+		B20000012F5319650088D4C0 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = B20000022F5319650088D4C0 /* PrivacyInfo.xcprivacy */; };
+		C30000012F5319650088D4C0 /* Nestic-iOS/AppCore/NesticWidgetActions.swift in Sources */ = {isa = PBXBuildFile; fileRef = C30000022F5319650088D4C0 /* Nestic-iOS/AppCore/NesticWidgetActions.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -33,7 +39,39 @@
 			remoteGlobalIDString = 221518EA2F5319650088D4C0;
 			remoteInfo = NesticWidget;
 		};
+		A10000832F5319650088D4C0 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 221518A62F5319630088D4C0 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = A10000302F5319650088D4C0;
+			remoteInfo = NesticWatch;
+		};
 /* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		221518EB2F5319650088D4C0 /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				221518E32F5319650088D4C0 /* NesticWidget.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A10000632F5319650088D4C0 /* Embed Watch Content */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "$(CONTENTS_FOLDER_PATH)/Watch";
+			dstSubfolderSpec = 16;
+			files = (
+				A10000012F5319650088D4C0 /* NesticWatch.app in Embed Watch Content */,
+			);
+			name = "Embed Watch Content";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
 		221518AE2F5319630088D4C0 /* Nestic-iOS.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Nestic-iOS.app"; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -43,6 +81,12 @@
 		221518E52F5319650088D4C0 /* NesticWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NesticWidget.swift; sourceTree = "<group>"; };
 		221518E62F5319650088D4C0 /* NesticWidget.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = NesticWidget.entitlements; sourceTree = "<group>"; };
 		221518F22F5319650088D4C0 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		A10000102F5319650088D4C0 /* NesticWatch.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = NesticWatch.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		A10000122F5319650088D4C0 /* Nestic-iOS/AppCore/NestModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Nestic-iOS/AppCore/NestModels.swift"; sourceTree = "<group>"; };
+		A10000132F5319650088D4C0 /* Nestic-iOS/AppCore/NestAPI.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Nestic-iOS/AppCore/NestAPI.swift"; sourceTree = "<group>"; };
+		A10000142F5319650088D4C0 /* Nestic-iOS/AppCore/NesticWatchShared.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Nestic-iOS/AppCore/NesticWatchShared.swift"; sourceTree = "<group>"; };
+		B20000022F5319650088D4C0 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		C30000022F5319650088D4C0 /* Nestic-iOS/AppCore/NesticWidgetActions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Nestic-iOS/AppCore/NesticWidgetActions.swift"; sourceTree = SOURCE_ROOT; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -59,6 +103,11 @@
 		221518CD2F5319650088D4C0 /* Nestic-iOSUITests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = "Nestic-iOSUITests";
+			sourceTree = "<group>";
+		};
+		A10000202F5319650088D4C0 /* WatchApp */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = WatchApp;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -92,6 +141,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		A10000612F5319650088D4C0 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -101,8 +157,10 @@
 				221518B02F5319630088D4C0 /* Nestic-iOS */,
 				221518C32F5319650088D4C0 /* Nestic-iOSTests */,
 				221518CD2F5319650088D4C0 /* Nestic-iOSUITests */,
+				A10000202F5319650088D4C0 /* WatchApp */,
 				221518E72F5319650088D4C0 /* NesticWidget */,
 				221518AF2F5319630088D4C0 /* Products */,
+				2225A2C43071D87300921A1C /* Recovered References */,
 			);
 			sourceTree = "<group>";
 		};
@@ -113,6 +171,7 @@
 				221518C02F5319650088D4C0 /* Nestic-iOSTests.xctest */,
 				221518CA2F5319650088D4C0 /* Nestic-iOSUITests.xctest */,
 				221518E42F5319650088D4C0 /* NesticWidget.appex */,
+				A10000102F5319650088D4C0 /* NesticWatch.app */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -120,11 +179,23 @@
 		221518E72F5319650088D4C0 /* NesticWidget */ = {
 			isa = PBXGroup;
 			children = (
+				B20000022F5319650088D4C0 /* PrivacyInfo.xcprivacy */,
 				221518E52F5319650088D4C0 /* NesticWidget.swift */,
 				221518E62F5319650088D4C0 /* NesticWidget.entitlements */,
 				221518F22F5319650088D4C0 /* Info.plist */,
 			);
 			path = NesticWidget;
+			sourceTree = "<group>";
+		};
+		2225A2C43071D87300921A1C /* Recovered References */ = {
+			isa = PBXGroup;
+			children = (
+				A10000122F5319650088D4C0 /* Nestic-iOS/AppCore/NestModels.swift */,
+				A10000132F5319650088D4C0 /* Nestic-iOS/AppCore/NestAPI.swift */,
+				A10000142F5319650088D4C0 /* Nestic-iOS/AppCore/NesticWatchShared.swift */,
+				C30000022F5319650088D4C0 /* Nestic-iOS/AppCore/NesticWidgetActions.swift */,
+			);
+			name = "Recovered References";
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -138,11 +209,13 @@
 				221518AB2F5319630088D4C0 /* Frameworks */,
 				221518AC2F5319630088D4C0 /* Resources */,
 				221518EB2F5319650088D4C0 /* Embed Foundation Extensions */,
+				A10000632F5319650088D4C0 /* Embed Watch Content */,
 			);
 			buildRules = (
 			);
 			dependencies = (
 				221518EE2F5319650088D4C0 /* PBXTargetDependency */,
+				A10000822F5319650088D4C0 /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				221518B02F5319630088D4C0 /* Nestic-iOS */,
@@ -153,25 +226,6 @@
 			productName = "Nestic-iOS";
 			productReference = 221518AE2F5319630088D4C0 /* Nestic-iOS.app */;
 			productType = "com.apple.product-type.application";
-		};
-		221518EA2F5319650088D4C0 /* NesticWidget */ = {
-			isa = PBXNativeTarget;
-			buildConfigurationList = 221518F12F5319650088D4C0 /* Build configuration list for PBXNativeTarget "NesticWidget" */;
-			buildPhases = (
-				221518ED2F5319650088D4C0 /* Sources */,
-				221518E92F5319650088D4C0 /* Frameworks */,
-				221518EC2F5319650088D4C0 /* Resources */,
-			);
-			buildRules = (
-			);
-			dependencies = (
-			);
-			name = NesticWidget;
-			packageProductDependencies = (
-			);
-			productName = NesticWidget;
-			productReference = 221518E42F5319650088D4C0 /* NesticWidget.appex */;
-			productType = "com.apple.product-type.app-extension";
 		};
 		221518BF2F5319650088D4C0 /* Nestic-iOSTests */ = {
 			isa = PBXNativeTarget;
@@ -219,6 +273,47 @@
 			productReference = 221518CA2F5319650088D4C0 /* Nestic-iOSUITests.xctest */;
 			productType = "com.apple.product-type.bundle.ui-testing";
 		};
+		221518EA2F5319650088D4C0 /* NesticWidget */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 221518F12F5319650088D4C0 /* Build configuration list for PBXNativeTarget "NesticWidget" */;
+			buildPhases = (
+				221518ED2F5319650088D4C0 /* Sources */,
+				221518E92F5319650088D4C0 /* Frameworks */,
+				221518EC2F5319650088D4C0 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = NesticWidget;
+			packageProductDependencies = (
+			);
+			productName = NesticWidget;
+			productReference = 221518E42F5319650088D4C0 /* NesticWidget.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
+		A10000302F5319650088D4C0 /* NesticWatch */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A10000402F5319650088D4C0 /* Build configuration list for PBXNativeTarget "NesticWatch" */;
+			buildPhases = (
+				A10000602F5319650088D4C0 /* Sources */,
+				A10000612F5319650088D4C0 /* Frameworks */,
+				A10000622F5319650088D4C0 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				A10000202F5319650088D4C0 /* WatchApp */,
+			);
+			name = NesticWatch;
+			packageProductDependencies = (
+			);
+			productName = NesticWatch;
+			productReference = A10000102F5319650088D4C0 /* NesticWatch.app */;
+			productType = "com.apple.product-type.application";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -232,9 +327,6 @@
 					221518AD2F5319630088D4C0 = {
 						CreatedOnToolsVersion = 26.0.1;
 					};
-					221518EA2F5319650088D4C0 = {
-						CreatedOnToolsVersion = 26.0.1;
-					};
 					221518BF2F5319650088D4C0 = {
 						CreatedOnToolsVersion = 26.0.1;
 						TestTargetID = 221518AD2F5319630088D4C0;
@@ -242,6 +334,12 @@
 					221518C92F5319650088D4C0 = {
 						CreatedOnToolsVersion = 26.0.1;
 						TestTargetID = 221518AD2F5319630088D4C0;
+					};
+					221518EA2F5319650088D4C0 = {
+						CreatedOnToolsVersion = 26.0.1;
+					};
+					A10000302F5319650088D4C0 = {
+						CreatedOnToolsVersion = 26.0.1;
 					};
 				};
 			};
@@ -260,6 +358,7 @@
 			projectRoot = "";
 			targets = (
 				221518AD2F5319630088D4C0 /* Nestic-iOS */,
+				A10000302F5319650088D4C0 /* NesticWatch */,
 				221518EA2F5319650088D4C0 /* NesticWidget */,
 				221518BF2F5319650088D4C0 /* Nestic-iOSTests */,
 				221518C92F5319650088D4C0 /* Nestic-iOSUITests */,
@@ -289,18 +388,15 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		221518EB2F5319650088D4C0 /* Embed Foundation Extensions */ = {
-			isa = PBXCopyFilesBuildPhase;
+		221518EC2F5319650088D4C0 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
-			dstPath = "";
-			dstSubfolderSpec = 13;
 			files = (
-				221518E32F5319650088D4C0 /* NesticWidget.appex in Embed Foundation Extensions */,
+				B20000012F5319650088D4C0 /* PrivacyInfo.xcprivacy in Resources */,
 			);
-			name = "Embed Foundation Extensions";
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		221518EC2F5319650088D4C0 /* Resources */ = {
+		A10000622F5319650088D4C0 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -336,6 +432,17 @@
 			buildActionMask = 2147483647;
 			files = (
 				221518E22F5319650088D4C0 /* NesticWidget.swift in Sources */,
+				C30000012F5319650088D4C0 /* Nestic-iOS/AppCore/NesticWidgetActions.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A10000602F5319650088D4C0 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A10000032F5319650088D4C0 /* Nestic-iOS/AppCore/NestModels.swift in Sources */,
+				A10000042F5319650088D4C0 /* Nestic-iOS/AppCore/NestAPI.swift in Sources */,
+				A10000052F5319650088D4C0 /* Nestic-iOS/AppCore/NesticWatchShared.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -356,6 +463,11 @@
 			isa = PBXTargetDependency;
 			target = 221518EA2F5319650088D4C0 /* NesticWidget */;
 			targetProxy = 221518E82F5319650088D4C0 /* PBXContainerItemProxy */;
+		};
+		A10000822F5319650088D4C0 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = A10000302F5319650088D4C0 /* NesticWatch */;
+			targetProxy = A10000832F5319650088D4C0 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -486,27 +598,27 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = "Nestic-iOS/Nestic-iOS.entitlements";
 				CODE_SIGN_STYLE = Automatic;
-				CODE_SIGN_ENTITLEMENTS = Nestic-iOS/Nestic-iOS.entitlements;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 3;
 				DEVELOPMENT_TEAM = 89JNN3239D;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = Configuration/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = Nestic;
-				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "Connect to your Nestic server on your local network.";
-				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_NSCameraUsageDescription = "Nestic uses the camera when you choose to add a photo to a tracker or health update.";
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-			MARKETING_VERSION = 1.0;
-			NESTIC_SERVER_URL = "http://127.0.0.1:8080";
-			PRODUCT_BUNDLE_IDENTIFIER = "com.bausch.Nestic-iOS";
+				MARKETING_VERSION = 1.0;
+				NESTIC_SERVER_URL = "https://api.nestic-app.com";
+				PRODUCT_BUNDLE_IDENTIFIER = "com.bausch.Nestic-iOS";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
@@ -523,27 +635,27 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = "Nestic-iOS/Nestic-iOS.entitlements";
 				CODE_SIGN_STYLE = Automatic;
-				CODE_SIGN_ENTITLEMENTS = Nestic-iOS/Nestic-iOS.entitlements;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 3;
 				DEVELOPMENT_TEAM = 89JNN3239D;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = Configuration/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = Nestic;
-				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "Connect to your Nestic server on your local network.";
-				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_NSCameraUsageDescription = "Nestic uses the camera when you choose to add a photo to a tracker or health update.";
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-			MARKETING_VERSION = 1.0;
-			NESTIC_SERVER_URL = "https://api.nestic-app.com";
-			PRODUCT_BUNDLE_IDENTIFIER = "com.bausch.Nestic-iOS";
+				MARKETING_VERSION = 1.0;
+				NESTIC_SERVER_URL = "https://api.nestic-app.com";
+				PRODUCT_BUNDLE_IDENTIFIER = "com.bausch.Nestic-iOS";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
@@ -649,7 +761,7 @@
 				APPLICATION_EXTENSION_API_ONLY = YES;
 				CODE_SIGN_ENTITLEMENTS = NesticWidget/NesticWidget.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 3;
 				DEVELOPMENT_TEAM = 89JNN3239D;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = NesticWidget/Info.plist;
@@ -659,7 +771,8 @@
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = "com.bausch.Nestic-iOS.widget";
 				PRODUCT_NAME = "$(TARGET_NAME)";
-				SKIP_INSTALL = NO;
+				SKIP_INSTALL = YES;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "$(inherited) NESTIC_WIDGET_EXTENSION";
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_DEFAULT_ACTOR_ISOLATION = nonisolated;
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -675,7 +788,7 @@
 				APPLICATION_EXTENSION_API_ONLY = YES;
 				CODE_SIGN_ENTITLEMENTS = NesticWidget/NesticWidget.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 3;
 				DEVELOPMENT_TEAM = 89JNN3239D;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = NesticWidget/Info.plist;
@@ -685,13 +798,60 @@
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = "com.bausch.Nestic-iOS.widget";
 				PRODUCT_NAME = "$(TARGET_NAME)";
-				SKIP_INSTALL = NO;
+				SKIP_INSTALL = YES;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "$(inherited) NESTIC_WIDGET_EXTENSION";
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_DEFAULT_ACTOR_ISOLATION = nonisolated;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		A10000412F5319650088D4C0 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = WatchAppIcon;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 3;
+				DEVELOPMENT_TEAM = 89JNN3239D;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = Nestic;
+				INFOPLIST_KEY_CFBundleIconName = WatchAppIcon;
+				INFOPLIST_KEY_WKCompanionAppBundleIdentifier = "com.bausch.Nestic-iOS";
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "com.bausch.Nestic-iOS.watchkitapp";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = watchos;
+				SKIP_INSTALL = YES;
+				SUPPORTED_PLATFORMS = "watchos watchsimulator";
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = 4;
+				WATCHOS_DEPLOYMENT_TARGET = 10.0;
+			};
+			name = Debug;
+		};
+		A10000422F5319650088D4C0 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = WatchAppIcon;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 3;
+				DEVELOPMENT_TEAM = 89JNN3239D;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = Nestic;
+				INFOPLIST_KEY_CFBundleIconName = WatchAppIcon;
+				INFOPLIST_KEY_WKCompanionAppBundleIdentifier = "com.bausch.Nestic-iOS";
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "com.bausch.Nestic-iOS.watchkitapp";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = watchos;
+				SKIP_INSTALL = YES;
+				SUPPORTED_PLATFORMS = "watchos watchsimulator";
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = 4;
+				WATCHOS_DEPLOYMENT_TARGET = 10.0;
 			};
 			name = Release;
 		};
@@ -739,6 +899,15 @@
 			buildConfigurations = (
 				221518EF2F5319650088D4C0 /* Debug */,
 				221518F02F5319650088D4C0 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		A10000402F5319650088D4C0 /* Build configuration list for PBXNativeTarget "NesticWatch" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A10000412F5319650088D4C0 /* Debug */,
+				A10000422F5319650088D4C0 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
