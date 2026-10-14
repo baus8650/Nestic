@@ -824,19 +824,11 @@ struct NesticWidgetView: View {
                 ZStack(alignment: .leading) {
                     Capsule().fill(.white.opacity(0.14))
                         .overlay {
-                            ZStack(alignment: .leading) {
-                                ForEach(timelineQuietIntervals, id: \.start) { interval in
-                                    let day = Calendar.current.dateInterval(of: .day, for: entry.date)!
-                                    let start = CGFloat(interval.start.timeIntervalSince(day.start) / day.duration)
-                                    let end = CGFloat(interval.end.timeIntervalSince(day.start) / day.duration)
-                                    Rectangle().fill(.white.opacity(0.20))
-                                        .frame(width: proxy.size.width * (end - start), height: proxy.size.height)
-                                        .offset(x: proxy.size.width * start)
-                                        .accessibilityHidden(true)
-                                }
-                            }
-                            .frame(width: proxy.size.width, height: proxy.size.height, alignment: .leading)
-                            .clipShape(Capsule())
+                            NesticQuietHoursBands(intervals: timelineQuietIntervals,
+                                day: Calendar.current.dateInterval(of: .day, for: entry.date) ?? DateInterval(start: entry.date, duration: 86400))
+                                .fill(.white.opacity(0.38))
+                                .clipShape(Capsule())
+                                .accessibilityHidden(true)
                         }
                     ForEach(1..<4, id: \.self) { index in
                         Rectangle()
@@ -884,29 +876,8 @@ struct NesticWidgetView: View {
     }
 
     private var timelineQuietIntervals: [DateInterval] {
-        let calendar = Calendar.current
-        guard let day = calendar.dateInterval(of: .day, for: entry.date),
-              let periods = entry.snapshot?.quietHours, !periods.isEmpty else { return [] }
-        var intervals: [DateInterval] = []
-        var beginning: Date?
-        var cursor = day.start
-        while cursor < day.end {
-            let minute = calendar.component(.hour, from: cursor) * 60 + calendar.component(.minute, from: cursor)
-            let quiet = periods.contains { period in
-                guard period.startMinute != period.endMinute else { return false }
-                return period.startMinute < period.endMinute
-                    ? minute >= period.startMinute && minute < period.endMinute
-                    : minute >= period.startMinute || minute < period.endMinute
-            }
-            if quiet, beginning == nil { beginning = cursor }
-            if !quiet, let start = beginning {
-                intervals.append(DateInterval(start: start, end: cursor))
-                beginning = nil
-            }
-            cursor = min(day.end, cursor.addingTimeInterval(60))
-        }
-        if let start = beginning { intervals.append(DateInterval(start: start, end: day.end)) }
-        return intervals
+        NesticTimelineQuietHours.intervals(on: entry.date,
+            periods: (entry.snapshot?.quietHours ?? []).map { ($0.startMinute, $0.endMinute) })
     }
 
     private var uses24HourClock: Bool {

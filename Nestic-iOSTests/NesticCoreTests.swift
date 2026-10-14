@@ -1,9 +1,45 @@
 import Foundation
+import SwiftUI
 import Testing
 @testable import Nestic_iOS
 
 @MainActor
 struct NesticCoreTests {
+    @Test func timelineQuietBandsCoverAllRangesAndOverlaps() throws {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+        let day = try #require(calendar.date(from: DateComponents(year: 2026, month: 10, day: 13)))
+        let intervals = NesticTimelineQuietHours.intervals(on: day,
+            periods: [(1380, 360), (720, 840), (780, 900)], calendar: calendar)
+        #expect(intervals == [DateInterval(start: day, duration: 6 * 3600),
+                             DateInterval(start: day.addingTimeInterval(12 * 3600), duration: 3 * 3600),
+                             DateInterval(start: day.addingTimeInterval(23 * 3600), duration: 3600)])
+        let shape = NesticQuietHoursBands(intervals: intervals, day: DateInterval(start: day, duration: 86400))
+        let path = shape.path(in: CGRect(x: 0, y: 0, width: 480, height: 30))
+        for x in [10.0, 100.0, 250.0, 295.0, 470.0] {
+            #expect(path.contains(CGPoint(x: x, y: 15)))
+        }
+        for x in [150.0, 220.0, 330.0, 400.0] {
+            #expect(!path.contains(CGPoint(x: x, y: 15)))
+        }
+        #expect(!path.contains(CGPoint(x: 240, y: 0))) // Rounded start of the noon band.
+    }
+
+    @Test func timelineQuietBandsRespectDaylightSavingDays() throws {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = try #require(TimeZone(identifier: "America/New_York"))
+        for (month, dayNumber, duration) in [(3, 8, 23.0), (11, 1, 25.0)] {
+            let date = try #require(calendar.date(from: DateComponents(year: 2026, month: month, day: dayNumber)))
+            let day = try #require(calendar.dateInterval(of: .day, for: date))
+            let intervals = NesticTimelineQuietHours.intervals(on: date, periods: [(1380, 360)], calendar: calendar)
+            #expect(day.duration == duration * 3600)
+            #expect(intervals.count == 2)
+            #expect(intervals.first?.start == day.start)
+            #expect(intervals.last?.end == day.end)
+            #expect(calendar.component(.hour, from: try #require(intervals.first?.end)) == 6)
+        }
+    }
+
     @Test func routineLoggingKeepsChosenTimeAcrossAllTargets() async throws {
         let defaults = UserDefaults(suiteName: "routine-time-\(UUID())")!
         let store = NesticStore(defaults: defaults)

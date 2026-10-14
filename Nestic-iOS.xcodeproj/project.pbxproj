@@ -15,6 +15,7 @@
 		A10000052F5319650088D4C0 /* Nestic-iOS/AppCore/NesticWatchShared.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000142F5319650088D4C0 /* Nestic-iOS/AppCore/NesticWatchShared.swift */; };
 		B20000012F5319650088D4C0 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = B20000022F5319650088D4C0 /* PrivacyInfo.xcprivacy */; };
 		C30000012F5319650088D4C0 /* Nestic-iOS/AppCore/NesticWidgetActions.swift in Sources */ = {isa = PBXBuildFile; fileRef = C30000022F5319650088D4C0 /* Nestic-iOS/AppCore/NesticWidgetActions.swift */; };
+		D40000012F5319650088D4C0 /* NesticTimelineQuietHours.swift in Sources */ = {isa = PBXBuildFile; fileRef = D40000022F5319650088D4C0 /* NesticTimelineQuietHours.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -87,6 +88,7 @@
 		A10000142F5319650088D4C0 /* Nestic-iOS/AppCore/NesticWatchShared.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Nestic-iOS/AppCore/NesticWatchShared.swift"; sourceTree = "<group>"; };
 		B20000022F5319650088D4C0 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		C30000022F5319650088D4C0 /* Nestic-iOS/AppCore/NesticWidgetActions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Nestic-iOS/AppCore/NesticWidgetActions.swift"; sourceTree = SOURCE_ROOT; };
+		D40000022F5319650088D4C0 /* NesticTimelineQuietHours.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Nestic-iOS/AppCore/NesticTimelineQuietHours.swift"; sourceTree = SOURCE_ROOT; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -194,6 +196,7 @@
 				A10000132F5319650088D4C0 /* Nestic-iOS/AppCore/NestAPI.swift */,
 				A10000142F5319650088D4C0 /* Nestic-iOS/AppCore/NesticWatchShared.swift */,
 				C30000022F5319650088D4C0 /* Nestic-iOS/AppCore/NesticWidgetActions.swift */,
+				D40000022F5319650088D4C0 /* NesticTimelineQuietHours.swift */,
 			);
 			name = "Recovered References";
 			sourceTree = "<group>";
@@ -432,6 +435,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				221518E22F5319650088D4C0 /* NesticWidget.swift in Sources */,
+				D40000012F5319650088D4C0 /* NesticTimelineQuietHours.swift in Sources */,
 				C30000012F5319650088D4C0 /* Nestic-iOS/AppCore/NesticWidgetActions.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

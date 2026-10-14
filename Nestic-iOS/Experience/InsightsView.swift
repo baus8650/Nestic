@@ -361,20 +361,11 @@ struct AnalyticsView: View {
                 ZStack(alignment: .leading) {
                     Capsule().fill(NesticTheme.ink.opacity(0.12))
                         .overlay {
-                            ZStack(alignment: .leading) {
-                                ForEach(quietIntervals, id: \.start) { interval in
-                                    let day = calendar.dateInterval(of: .day, for: activeDay) ?? DateInterval(start: rangeStart, end: rangeEnd)
-                                    let start = CGFloat(interval.start.timeIntervalSince(day.start) / day.duration)
-                                    let end = CGFloat(interval.end.timeIntervalSince(day.start) / day.duration)
-                                    Rectangle()
-                                        .fill(NesticTheme.ink.opacity(0.16))
-                                        .frame(width: proxy.size.width * (end - start), height: proxy.size.height)
-                                        .offset(x: proxy.size.width * start)
-                                        .accessibilityHidden(true)
-                                }
-                            }
-                            .frame(width: proxy.size.width, height: proxy.size.height, alignment: .leading)
-                            .clipShape(Capsule())
+                            NesticQuietHoursBands(intervals: quietIntervals,
+                                day: calendar.dateInterval(of: .day, for: activeDay) ?? DateInterval(start: rangeStart, end: rangeEnd))
+                                .fill(NesticTheme.forest.opacity(0.32))
+                                .clipShape(Capsule())
+                                .accessibilityHidden(true)
                         }
                     ForEach(1..<4, id: \.self) { index in
                         Rectangle()
@@ -403,25 +394,9 @@ struct AnalyticsView: View {
         .frame(maxWidth: .infinity)
     }
 
-    // Walk actual minutes so overnight periods and daylight-saving transitions
-    // use the same local wall-clock times as the quiet-hours settings.
     private var timelineQuietIntervals: [DateInterval] {
-        guard let day = calendar.dateInterval(of: .day, for: activeDay),
-              !store.quietHoursPreferences.periods.isEmpty else { return [] }
-        var intervals: [DateInterval] = []
-        var beginning: Date?
-        var cursor = day.start
-        while cursor < day.end {
-            let quiet = store.quietHoursPreferences.periods.contains { $0.contains(cursor, calendar: calendar) }
-            if quiet, beginning == nil { beginning = cursor }
-            if !quiet, let start = beginning {
-                intervals.append(DateInterval(start: start, end: cursor))
-                beginning = nil
-            }
-            cursor = min(day.end, cursor.addingTimeInterval(60))
-        }
-        if let start = beginning { intervals.append(DateInterval(start: start, end: day.end)) }
-        return intervals
+        NesticTimelineQuietHours.intervals(on: activeDay,
+            periods: store.quietHoursPreferences.periods.map { ($0.startMinute, $0.endMinute) }, calendar: calendar)
     }
 
     private var uses24HourClock: Bool {
