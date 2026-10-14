@@ -292,6 +292,16 @@ final class NesticStore: ObservableObject {
         return result
     }
 
+    func timingInsight(for subject: NestSubject, trackerID: UUID, now: Date = Date()) -> ForecastTimingInsight? {
+        guard isDemo || predictionAccess, let tracker = trackers(for: subject).first(where: { $0.id == trackerID }) else { return nil }
+        let dates = entries(for: subject).filter { $0.actionId == trackerID && $0.shouldIncludeInPredictions }.map(\.occurredAt)
+        let results = forecastSnapshots.filter { $0.subjectID == subject.id && $0.targetTrackerID == trackerID }.compactMap { snapshot -> ForecastTimingInsight.Result? in
+            guard let actual = snapshot.actualEventAt else { return nil }
+            return .init(actualAt: actual, predictedAt: snapshot.selectedPredictedAt, capturedAt: snapshot.createdAt)
+        }
+        return ForecastTimingInsight.build(name: tracker.name, results: results, eventDates: dates, now: now)
+    }
+
     func prediction(for subject: NestSubject, now: Date = Date()) -> EventPrediction? {
         predictions(for: subject, now: now).first
     }

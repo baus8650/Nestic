@@ -787,6 +787,16 @@ struct EventPredictionCard: View {
             }
             .font(.caption.weight(.medium)).foregroundStyle(NesticTheme.forest)
             Text(prediction.explanation).font(.caption).foregroundStyle(.secondary)
+            if let trackerID = prediction.targetTrackerID, let insight = store.timingInsight(for: subject, trackerID: trackerID) {
+                VStack(alignment: .leading, spacing: 5) {
+                    Label("Timing insight", systemImage: "clock.arrow.2.circlepath").font(.caption.weight(.semibold))
+                    Text(insight.headline).font(.subheadline.weight(.medium))
+                    Text(insight.detail).font(.caption).foregroundStyle(.secondary)
+                    Text(insight.recordedAt, format: .dateTime.month(.abbreviated).day().hour().minute()).font(.caption2).foregroundStyle(.secondary)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading).padding(12)
+                .background(NesticTheme.forest.opacity(0.06), in: RoundedRectangle(cornerRadius: 12))
+            }
             Text("Estimates come from recorded history, not health or professional advice. Follow the guidance appropriate for your care situation.")
                 .font(.caption).foregroundStyle(.secondary)
             if !prediction.inputNames.isEmpty {

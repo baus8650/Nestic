@@ -696,3 +696,57 @@ struct ForecastProfileInputs {
         columns.map { c in value(c.name, at: date).map { min(3, max(-3, ($0 - c.mean) / c.scale)) } ?? 0 }
     }
 }
+
+struct ForecastTimingInsight: Equatable {
+    struct Result {
+        let actualAt: Date
+        let predictedAt: Date
+        let capturedAt: Date
+        var difference: Double { actualAt.timeIntervalSince(predictedAt) }
+    }
+    let headline: String
+    let detail: String
+    let recordedAt: Date
+    static func duration(_ seconds: Double) -> String {
+        if abs(seconds) < 60 { return "under 1 min" }
+        let minutes = max(1, Int((abs(seconds) / 60).rounded()))
+        if minutes < 60 { return "\(minutes) min" }
+        return minutes % 60 == 0 ? "\(minutes / 60) hr" : "\(minutes / 60) hr \(minutes % 60) min"
+    }
+    static func build(name: String, results: [Result], eventDates: [Date], now: Date = Date()) -> Self? {
+        let dates = Array(Set(eventDates.filter { $0 <= now })).sorted()
+        let validDates = Set(dates)
+        // Multiple devices or recalculations must not count one event twice.
+        let valid = results.filter { validDates.contains($0.actualAt) && $0.capturedAt <= $0.actualAt && $0.capturedAt <= now && $0.predictedAt.timeIntervalSince1970.isFinite }
+        let scored = Dictionary(grouping: valid, by: \.actualAt).compactMap { _, rows in rows.max { $0.capturedAt < $1.capturedAt } }.sorted { $0.actualAt > $1.actualAt }
+        if let latest = scored.first {
+            let delta = latest.difference
+            let headline = abs(delta) <= 300
+                ? "\(name) happened close to its prediction (within 5 min)."
+                : "\(name) happened \(duration(delta)) \(delta < 0 ? "earlier" : "later") than predicted."
+            let recent = Array(scored.prefix(10))
+            var detail = "Compared with a forecast saved before this update."
+            if recent.count >= 3 {
+                let differences = recent.map(\.difference).sorted()
+                let median = differences.count.isMultiple(of: 2) ? (differences[differences.count / 2 - 1] + differences[differences.count / 2]) / 2 : differences[differences.count / 2]
+                let agreeing = differences.filter { median < 0 ? $0 < -300 : $0 > 300 }.count
+                if abs(median) > 300 && Double(agreeing) / Double(recent.count) >= 0.7 {
+                    detail = "Recently, \(name) tends to happen about \(duration(median)) \(median < 0 ? "earlier" : "later") than predicted (\(recent.count) scored updates)."
+                } else {
+                    let error = differences.reduce(0) { $0 + abs($1) } / Double(recent.count)
+                    detail = "Recent updates average \(duration(error)) away from their predictions (\(recent.count) scored updates)."
+                }
+            }
+            return Self(headline: headline, detail: detail, recordedAt: latest.actualAt)
+        }
+        // A cadence comparison is useful before there is a saved forecast,
+        // but is explicitly described as usual timing, never forecast accuracy.
+        guard dates.count >= 5 else { return nil }
+        let intervals = zip(dates, dates.dropFirst()).map { $1.timeIntervalSince($0) }
+        let prior = Array(intervals.dropLast().suffix(10)).sorted()
+        let typical = prior.count.isMultiple(of: 2) ? (prior[prior.count / 2 - 1] + prior[prior.count / 2]) / 2 : prior[prior.count / 2]
+        let delta = intervals.last! - typical
+        let headline = abs(delta) <= 300 ? "\(name) happened close to its usual timing." : "\(name) happened \(duration(delta)) \(delta < 0 ? "earlier" : "later") than usual."
+        return Self(headline: headline, detail: "Compared with the median of \(prior.count) previous intervals; no saved forecast was available for this update.", recordedAt: dates.last!)
+    }
+}
