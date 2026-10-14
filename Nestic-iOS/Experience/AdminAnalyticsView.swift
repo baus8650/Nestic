@@ -4,6 +4,7 @@ import Charts
 struct AdminAnalyticsView: View {
     @EnvironmentObject private var store: NesticStore
     @State private var days = 30
+    @State private var metric = AdminTrafficMetric.pageViews
     @State private var data: NesticUsageDashboard?
     @State private var error: String?
     var body: some View {
@@ -23,12 +24,35 @@ struct AdminAnalyticsView: View {
                         LabeledContent("Recorded updates",value:data.recordedUpdates.formatted())
                     }
                     Section("Daily activity · UTC") {
+                        Picker("Show in graph", selection: $metric) {
+                            ForEach(AdminTrafficMetric.allCases) { metric in
+                                Text(metric.rawValue).tag(metric)
+                            }
+                        }
+                        .pickerStyle(.menu)
                         Chart(data.daily) { day in
-                            LineMark(x:.value("Day",day.date),y:.value("Page views",day.pageViews)).foregroundStyle(by:.value("Metric","Page views"))
-                            LineMark(x:.value("Day",day.date),y:.value("App Store clicks",day.appStoreClicks)).foregroundStyle(by:.value("Metric","App Store clicks"))
-                        }.frame(height:200)
-                        ForEach(data.daily.reversed().prefix(14)) { day in
-                            VStack(alignment:.leading) { Text(day.date).font(.subheadline.weight(.semibold)); Text("\(day.pageViews) views · \(day.appStoreClicks) store clicks · \(day.newAccounts) accounts · \(day.recordedUpdates) updates").font(.caption).foregroundStyle(.secondary) }
+                            BarMark(x: .value("Day", day.date), y: .value(metric.rawValue, metric.count(on: day)))
+                                .foregroundStyle(NesticTheme.forest)
+                        }
+                        .chartXAxis(.hidden)
+                        .frame(height: 200)
+                        .accessibilityLabel("Daily \(metric.rawValue.lowercased()) over \(data.days) days, UTC")
+                        HStack {
+                            Text(data.daily.first?.date ?? "")
+                            Spacer()
+                            Text(data.daily.last?.date ?? "")
+                        }
+                        .font(.caption).foregroundStyle(.secondary)
+                        DisclosureGroup("Daily totals · \(data.days) days") {
+                            ForEach(data.daily.reversed()) { day in
+                                VStack(alignment: .leading, spacing: 5) {
+                                    Text(day.date).font(.subheadline.weight(.semibold))
+                                    Text("\(day.pageViews) views · \(day.appOpens) app opens · \(day.appStoreClicks) store clicks")
+                                    Text("\(day.newAccounts) new accounts · \(day.recordedUpdates) recorded updates")
+                                }
+                                .font(.caption).foregroundStyle(.secondary)
+                                .accessibilityElement(children: .combine)
+                            }
                         }
                     }
                     breakdown("Countries · approximate",data.countries)
@@ -47,18 +71,53 @@ struct AdminAnalyticsView: View {
                         }
                     }
                     Section { Link("IP Geolocation by DB-IP",destination:URL(string:"https://db-ip.com")!); Text("Country, region and city estimates use offline DB-IP Lite databases. VPNs and relays can differ from the visitor’s actual location. Raw IPs and tracker content are not stored in analytics. Event retention: 90 days.").font(.caption).foregroundStyle(.secondary) }
-                } else if let error { Text(error).foregroundStyle(.red) } else { ProgressView("Loading analytics…") }
+                } else if let error {
+                    Section {
+                        Text("Couldn’t load analytics").font(.headline)
+                        Text(error).font(.subheadline).foregroundStyle(.secondary)
+                        Button("Try again") { Task { await refresh() } }
+                    }
+                } else { ProgressView("Loading analytics…") }
             } else { ContentUnavailableView("Administrator access required",systemImage:"lock") }
         }.formStyle().navigationTitle("Traffic & growth").task(id:days) { await refresh() }.refreshable { await refresh() }
     }
     private func refresh() async {
         guard store.currentUser?.isAdmin == true && !store.isDemo else { return }
-        do { data = try await store.loadUsageAnalytics(days:days); error = nil } catch { self.error = error.localizedDescription }
+        let requestedDays = days
+        data = nil
+        error = nil
+        do {
+            let result = try await store.loadUsageAnalytics(days: requestedDays)
+            guard !Task.isCancelled, requestedDays == days else { return }
+            data = result
+        } catch {
+            guard !Task.isCancelled, requestedDays == days else { return }
+            self.error = error.localizedDescription
+        }
     }
     @ViewBuilder private func breakdown(_ title: String,_ rows: [NesticUsageDimension]) -> some View {
         Section(title) {
             ForEach(rows.prefix(20)) { row in LabeledContent(title.hasPrefix("Countries") ? (Locale.current.localizedString(forRegionCode:row.name) ?? row.name) : row.name,value:row.count.formatted()) }
             if rows.isEmpty { Text("No opted-in data yet").foregroundStyle(.secondary) }
+        }
+    }
+}
+
+
+private enum AdminTrafficMetric: String, CaseIterable, Identifiable {
+    case pageViews = "Website views"
+    case appOpens = "App opens"
+    case storeClicks = "App Store clicks"
+    case accounts = "New accounts"
+    case updates = "Recorded updates"
+    var id: String { rawValue }
+    func count(on day: NesticUsageDay) -> Int {
+        switch self {
+        case .pageViews: day.pageViews
+        case .appOpens: day.appOpens
+        case .storeClicks: day.appStoreClicks
+        case .accounts: day.newAccounts
+        case .updates: day.recordedUpdates
         }
     }
 }

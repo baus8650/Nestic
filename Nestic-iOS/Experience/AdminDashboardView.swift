@@ -10,7 +10,19 @@ struct AdminDashboardView: View {
         List {
             if store.currentUser?.isAdmin == true, !store.isDemo {
                 Section {
-                    NavigationLink("Traffic & growth") { AdminAnalyticsView() }
+                    NavigationLink {
+                        AdminAnalyticsView()
+                    } label: {
+                        Label {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("Traffic & growth")
+                                Text("Website visits, locations, and app activity")
+                                    .font(.caption).foregroundStyle(.secondary)
+                            }
+                        } icon: {
+                            Image(systemName: "chart.bar.xaxis")
+                        }
+                    }
                     NavigationLink("Feedback inbox") { AdminFeedbackView() }
                     NavigationLink("User accounts") { AdminUsersView() }
                 }
