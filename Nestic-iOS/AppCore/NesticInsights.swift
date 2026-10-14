@@ -31,6 +31,20 @@ enum NesticAnalyticsRange: String, CaseIterable, Identifiable, Sendable {
 struct NestPredictionPreferences: Codable, Hashable, Sendable {
     var inputTrackerIDs: [UUID] = []
     var targetTrackerIDs: [UUID] = []
+    var includeAge = false
+    var includeWeight = false
+    enum CodingKeys: String, CodingKey { case inputTrackerIDs, targetTrackerIDs, includeAge, includeWeight }
+    init(inputTrackerIDs: [UUID] = [], targetTrackerIDs: [UUID] = [], includeAge: Bool = false, includeWeight: Bool = false) {
+        self.inputTrackerIDs = inputTrackerIDs; self.targetTrackerIDs = targetTrackerIDs
+        self.includeAge = includeAge; self.includeWeight = includeWeight
+    }
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        inputTrackerIDs = try c.decodeIfPresent([UUID].self, forKey: .inputTrackerIDs) ?? []
+        targetTrackerIDs = try c.decodeIfPresent([UUID].self, forKey: .targetTrackerIDs) ?? []
+        includeAge = try c.decodeIfPresent(Bool.self, forKey: .includeAge) ?? false
+        includeWeight = try c.decodeIfPresent(Bool.self, forKey: .includeWeight) ?? false
+    }
 }
 
 /// A daily repeating quiet period. When the end is earlier than the start,
@@ -216,7 +230,7 @@ enum EventPredictionEngine {
         now: Date = Date()
     ) -> EventPrediction? {
         let subjectEntries = entries
-            .filter { $0.entityId == subject.id && $0.shouldIncludeInPredictions }
+            .filter { $0.entityId == subject.id && $0.shouldIncludeInPredictions && $0.occurredAt <= now }
             .sorted { $0.occurredAt < $1.occurredAt }
         let entriesByTracker = Dictionary(grouping: subjectEntries, by: \.actionId)
         let configuredTargetIDs = preferences.targetTrackerIDs.isEmpty
@@ -249,6 +263,11 @@ enum EventPredictionEngine {
         }
         guard !intervals.isEmpty else { return nil }
 
+        let profileDates = zip(targetEntries, targetEntries.dropFirst()).compactMap { previous, next -> Date? in
+            let hours = next.occurredAt.timeIntervalSince(previous.occurredAt) / 3600
+            return hours > 0.15 && hours < 72 ? next.occurredAt : nil
+        }
+        let profileInputs = ForecastProfileInputs(subject: subject, preferences: preferences, dates: profileDates, now: now)
         var samples: [(features: [Double], target: Double)] = []
         for index in 0..<(targetEntries.count - 1) {
             let previous = targetEntries[index]
@@ -263,13 +282,13 @@ enum EventPredictionEngine {
             // made selected input trackers look as if they had no effect.
             samples.append((features: featureVector(at: next.occurredAt, since: previous.occurredAt,
                                                      inputTrackers: inputTrackers, entriesByTracker: entriesByTracker,
-                                                     normalizers: normalizers), target: hours))
+                                                     normalizers: normalizers) + profileInputs.features(at: next.occurredAt), target: hours))
         }
 
         let medianInterval = median(intervals)
         let currentFeatures = featureVector(at: now, since: targetEntries.last?.occurredAt,
                                             inputTrackers: inputTrackers, entriesByTracker: entriesByTracker,
-                                            normalizers: normalizers)
+                                            normalizers: normalizers) + profileInputs.features(at: now)
         let baselineInterval = min(72, max(0.25, medianInterval))
         let coefficients = samples.count >= 3 ? ridgeCoefficients(samples: samples) : nil
         let rawContextHours = coefficients.map { coefficients in
@@ -290,7 +309,7 @@ enum EventPredictionEngine {
             ? (contextualInterval ?? baselineInterval)
             : baselineInterval
         let targetNames = targetIDs.compactMap { id in trackers.first { $0.id == id }?.name }
-        let inputNames = inputTrackers.map(\.name)
+        let inputNames = inputTrackers.map(\.name) + profileInputs.names
         let lastEventAt = targetEntries.last?.occurredAt ?? now
         // The model learns an interval between occurrences. Anchor that interval
         // to the last matching target so an already-overdue event is shown as
@@ -332,7 +351,7 @@ enum EventPredictionEngine {
                 latestLearnedValue: latestLearnedValue
             )
         }
-        let explanation: String
+        var explanation: String
         let targetDescription = targetNames.count == 1 ? targetNames[0] : "selected events"
         if validationSampleCount >= 3, let validationErrorHours {
             explanation = "Validated the \(selectedModel.title) against \(validationSampleCount) recent forecasts; timing is typically within \(hoursDescription(validationErrorHours))."
@@ -341,6 +360,13 @@ enum EventPredictionEngine {
             explanation = "\(modelDescription.capitalized) \(samples.count) \(targetDescription.lowercased()) intervals, time of day, and \(inputNames.count) recorded metric\(inputNames.count == 1 ? "" : "s")."
         } else {
             explanation = "Building a baseline from \(intervals.count) recent \(targetDescription.lowercased()) interval\(intervals.count == 1 ? "" : "s") plus time-of-day and metric history."
+        }
+
+        if preferences.includeWeight && !profileInputs.names.contains("Subject weight") {
+            explanation += " Weight is waiting for at least three intervals with dated, changing weights; save weight in the subject’s details to begin."
+        }
+        if preferences.includeAge && !profileInputs.names.contains("Subject age") {
+            explanation += " Age is waiting for a birthday and enough history."
         }
 
         // Decompose the linear estimate into intercept, tracker, and calendar
@@ -355,7 +381,11 @@ enum EventPredictionEngine {
                                                          hours: terms[offset..<(offset + 10)].reduce(0, +)))
             }
             contributions.append(ForecastContribution(id: inputTrackers.count + 1, name: "Time of day + weekday",
-                                                     hours: terms.suffix(5).reduce(0, +)))
+                                                     hours: terms[(1 + inputTrackers.count * 10)..<(6 + inputTrackers.count * 10)].reduce(0, +)))
+            for (index, name) in profileInputs.names.enumerated() {
+                contributions.append(ForecastContribution(id: inputTrackers.count + 3 + index, name: name,
+                    hours: terms[6 + inputTrackers.count * 10 + index]))
+            }
         }
         let mean = intervals.reduce(0, +) / Double(intervals.count)
         let deviation = sqrt(intervals.reduce(0) { $0 + pow($1 - mean, 2) } / Double(intervals.count))
@@ -635,3 +665,34 @@ enum EventPredictionEngine {
 // Keep the old names available for existing integrations while the feature becomes generic.
 typealias BathroomPrediction = EventPrediction
 typealias BathroomPredictionEngine = EventPredictionEngine
+
+/// Only observed, varying profile inputs enter the model. Missing historical
+/// weights are not filled using today's weight, and extrapolation is bounded.
+struct ForecastProfileInputs {
+    struct WeightRecord: Decodable { let recordedAt: Double; let weightKg: Double? }
+    struct Column { let name: String; let mean: Double; let scale: Double }
+    let birthday: Date?
+    let weights: [WeightRecord]
+    var columns: [Column] = []
+    var names: [String] { columns.map(\.name) }
+    init(subject: NestSubject, preferences: NestPredictionPreferences, dates: [Date], now: Date) {
+        let f = DateFormatter(); f.locale = Locale(identifier: "en_US_POSIX"); f.calendar = Calendar(identifier: .gregorian); f.dateFormat = "yyyy-MM-dd"; f.isLenient = false
+        birthday = subject.metadata?["birthday"].flatMap { f.date(from: $0) }
+        weights = subject.metadata?["weightHistoryJSON"].flatMap { $0.data(using: .utf8) }.flatMap { try? JSONDecoder().decode([WeightRecord].self, from: $0) }?.sorted { $0.recordedAt < $1.recordedAt } ?? []
+        for (name, enabled) in [("Subject age", preferences.includeAge), ("Subject weight", preferences.includeWeight)] where enabled {
+            let values = dates.compactMap { value(name, at: $0) }
+            guard values.count >= 3, value(name, at: now) != nil else { continue }
+            let mean = values.reduce(0, +) / Double(values.count)
+            let scale = sqrt(values.reduce(0) { $0 + pow($1 - mean, 2) } / Double(values.count))
+            guard scale.isFinite && scale > 0.000001 else { continue }
+            columns.append(Column(name: name, mean: mean, scale: scale))
+        }
+    }
+    func value(_ name: String, at date: Date) -> Double? {
+        if name == "Subject age" { return birthday.flatMap { date >= $0 ? date.timeIntervalSince($0) / (365.2425 * 86400) : nil } }
+        return weights.last { $0.recordedAt <= date.timeIntervalSince1970 }?.weightKg.flatMap { $0.isFinite && $0 > 0 ? $0 : nil }
+    }
+    func features(at date: Date) -> [Double] {
+        columns.map { c in value(c.name, at: date).map { min(3, max(-3, ($0 - c.mean) / c.scale)) } ?? 0 }
+    }
+}

@@ -1002,12 +1002,16 @@ struct PredictionSettingsSheet: View {
     let initial: NestPredictionPreferences
     @State private var inputIDs: Set<UUID>
     @State private var targetIDs: Set<UUID>
+    @State private var includeAge: Bool
+    @State private var includeWeight: Bool
 
     init(subject: NestSubject, initial: NestPredictionPreferences) {
         self.subject = subject
         self.initial = initial
         _inputIDs = State(initialValue: Set(initial.inputTrackerIDs))
         _targetIDs = State(initialValue: Set(initial.targetTrackerIDs))
+        _includeAge = State(initialValue: initial.includeAge)
+        _includeWeight = State(initialValue: initial.includeWeight)
     }
 
     private var trackers: [NestTracker] { store.trackers(for: subject) }
@@ -1033,6 +1037,12 @@ struct PredictionSettingsSheet: View {
                         }
                     }
                 } header: { Text("Learn from these data points") }
+                Section("Subject details") {
+                    Toggle("Include age", isOn: $includeAge)
+                    Toggle("Include weight", isOn: $includeWeight)
+                    Text("Optional. Add a birthday and weight in the subject’s Edit details screen. Age is calculated at each event; weight is learned from dated changes starting when you save it. Inputs stay inactive until enough history is available.")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
                 Section {
                     Label("Nestic needs at least two updates for a baseline, and three or more intervals before it starts fitting a model.", systemImage: "lock.privacy")
                         .font(.caption).foregroundStyle(.secondary)
@@ -1045,7 +1055,7 @@ struct PredictionSettingsSheet: View {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Save") {
-                        store.updatePredictionPreferences(for: subject, inputTrackerIDs: Array(inputIDs), targetTrackerIDs: Array(targetIDs))
+                        store.updatePredictionPreferences(for: subject, inputTrackerIDs: Array(inputIDs), targetTrackerIDs: Array(targetIDs), includeAge: includeAge, includeWeight: includeWeight)
                         dismiss()
                     }.disabled(targetIDs.isEmpty)
                 }

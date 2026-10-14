@@ -226,7 +226,8 @@ final class NesticStore: ObservableObject {
     func predictions(for subject: NestSubject, now: Date = Date()) -> [EventPrediction] {
         guard isDemo || predictionAccess else { return [] }
         let local = localPredictions(for: subject, now: now)
-        guard !isDemo, !sharedForecasts.isEmpty else { return local }
+        let profilePreferences = preferences(for: subject)
+        guard !isDemo, !sharedForecasts.isEmpty, !profilePreferences.includeAge, !profilePreferences.includeWeight else { return local }
 
         let subjectTrackerIDs = Set(trackers(for: subject).map(\.id))
         let sharedTargetIDs = sharedForecasts
@@ -239,7 +240,7 @@ final class NesticStore: ObservableObject {
             return (trackerID, latest.occurredAt)
         })
         let remoteByTracker = Dictionary(uniqueKeysWithValues: sharedForecasts.compactMap { forecast -> (UUID, EventPrediction)? in
-            guard forecast.subjectId == subject.id,
+            guard !forecast.inputNames.contains("Subject age"), !forecast.inputNames.contains("Subject weight"), forecast.subjectId == subject.id,
                   let latestEventAt = latestByTracker[forecast.trackerId],
                   abs(latestEventAt.timeIntervalSince(forecast.lastEventAt)) < 1 else { return nil }
             return (forecast.trackerId, forecast.eventPrediction())
@@ -317,9 +318,11 @@ final class NesticStore: ObservableObject {
         refreshWidget()
     }
 
-    func updatePredictionPreferences(for subject: NestSubject, inputTrackerIDs: [UUID], targetTrackerIDs: [UUID]) {
+    func updatePredictionPreferences(for subject: NestSubject, inputTrackerIDs: [UUID], targetTrackerIDs: [UUID], includeAge: Bool = false, includeWeight: Bool = false) {
         predictionPreferences[subject.id] = NestPredictionPreferences(inputTrackerIDs: inputTrackerIDs,
-                                                                       targetTrackerIDs: targetTrackerIDs)
+                                                                       targetTrackerIDs: targetTrackerIDs, includeAge: includeAge, includeWeight: includeWeight)
+        localForecastCache.removeValue(forKey: subject.id)
+        sharedForecasts.removeAll { $0.subjectId == subject.id }
         persistPredictionPreferences()
         markSettingsChanged()
         refreshWidget()

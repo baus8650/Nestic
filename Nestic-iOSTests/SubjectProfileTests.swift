@@ -33,3 +33,35 @@ struct SubjectProfileTests {
         #expect(abs(try #require(Double(draft.weight)) - 100) < 0.001)
     }
 }
+
+struct ForecastProfileTests {
+    func subject(_ metadata: [String: String]) -> NestSubject {
+        NestSubject(id: UUID(), nestId: UUID(), name: "Milo", kind: .pet, emoji: "🐶", pinnedActionIDs: [], metadata: metadata)
+    }
+    @Test func oldPreferencesDecodeWithProfileInputsOff() throws {
+        let preferences = try JSONDecoder().decode(NestPredictionPreferences.self, from: Data("{}".utf8))
+        #expect(!preferences.includeAge && !preferences.includeWeight)
+    }
+    @Test func weightsAreDatedAndClearingDoesNotReviveEarlierWeight() {
+        let model = ForecastProfileInputs(subject: subject(["weightHistoryJSON": "[{\"recordedAt\":100,\"weightKg\":10},{\"recordedAt\":200,\"weightKg\":20},{\"recordedAt\":300}]"]), preferences: .init(includeWeight: true), dates: [150,210,250].map { Date(timeIntervalSince1970: $0) }, now: Date(timeIntervalSince1970: 250))
+        #expect(model.names == ["Subject weight"])
+        #expect(model.value("Subject weight", at: Date(timeIntervalSince1970: 99)) == nil)
+        #expect(model.value("Subject weight", at: Date(timeIntervalSince1970: 150)) == 10)
+        #expect(model.value("Subject weight", at: Date(timeIntervalSince1970: 350)) == nil)
+        #expect(model.features(at: Date(timeIntervalSince1970: 99)) == [0])
+    }
+    @Test func constantOrMissingWeightsAreNotReportedAsLearningInputs() {
+        let dates = [150,200,250].map { Date(timeIntervalSince1970: $0) }
+        let model = ForecastProfileInputs(subject: subject(["weightKg": "10", "weightHistoryJSON": "[{\"recordedAt\":100,\"weightKg\":10}]"]), preferences: .init(includeWeight: true), dates: dates, now: dates.last!)
+        #expect(model.names.isEmpty)
+    }
+    @Test func ageUsesEventDateAndOptionsDefaultOff() throws {
+        let birthday = try #require(NesticSubjectProfileDraft.formatter().date(from: "2020-01-01"))
+        let dates = [10,20,30].map { birthday.addingTimeInterval(Double($0) * 86400) }
+        let s = subject(["birthday": "2020-01-01"])
+        let enabled = ForecastProfileInputs(subject: s, preferences: .init(includeAge: true), dates: dates, now: dates.last!)
+        #expect(enabled.names == ["Subject age"])
+        #expect(enabled.value("Subject age", at: dates[0])! < enabled.value("Subject age", at: dates[2])!)
+        #expect(ForecastProfileInputs(subject: s, preferences: .init(), dates: dates, now: dates.last!).names.isEmpty)
+    }
+}
