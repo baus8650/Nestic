@@ -101,6 +101,11 @@ final class NesticSubscriptionStore: ObservableObject {
         hasPredictionAccess = storeKitEntitlement || manualProOverride
     }
 
+    func refreshAccessForBackgroundAction(manualPro: Bool) async {
+        setManualProOverride(manualPro)
+        await refreshEntitlement()
+    }
+
     private func refreshEntitlement() async {
         var entitled = false
         for await result in Transaction.currentEntitlements {

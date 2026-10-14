@@ -50,7 +50,7 @@ final class NesticStore: ObservableObject {
     @Published private(set) var nests: [NestSpace] = []
     @Published private(set) var selectedNestID: UUID? { didSet { invalidatePredictionCache() } }
     @Published private(set) var subjects: [NestSubject] = [] { didSet { invalidatePredictionCache(); subjectLookupCache = nil } }
-    @Published private(set) var trackers: [NestTracker] = [] { didSet { invalidatePredictionCache(); trackerLookupCache = nil } }
+    @Published private(set) var allTrackers: [NestTracker] = [] { didSet { invalidatePredictionCache(); trackerLookupCache = nil } }
     @Published private(set) var entries: [NestEntry] = [] { didSet { invalidatePredictionCache(); subjectEntryCache = nil } }
     @Published private(set) var members: [NestPerson] = []
     @Published private(set) var routines: [NestRoutine] = []
@@ -147,9 +147,11 @@ final class NesticStore: ObservableObject {
         return subjectLookupCache?[id]
     }
 
+    var trackers: [NestTracker] { allTrackers.filter { $0.isArchived != true } }
+
     func tracker(id: UUID) -> NestTracker? {
         if trackerLookupCache == nil {
-            trackerLookupCache = Dictionary(trackers.map { ($0.id, $0) }, uniquingKeysWith: { _, latest in latest })
+            trackerLookupCache = Dictionary(allTrackers.map { ($0.id, $0) }, uniquingKeysWith: { _, latest in latest })
         }
         return trackerLookupCache?[id]
     }
@@ -188,7 +190,12 @@ final class NesticStore: ObservableObject {
 
     func trackers(for subject: NestSubject) -> [NestTracker] {
         let currentSubject = self.subject(id: subject.id) ?? subject
-        return currentSubject.pinnedActionIDs.compactMap { tracker(id: $0) }
+        return currentSubject.pinnedActionIDs.compactMap { tracker(id: $0) }.filter { $0.isArchived != true }
+    }
+
+    func historicalTrackers(for subject: NestSubject) -> [NestTracker] {
+        let ids = Set(entries(for: subject).map(\.actionId)).union(subject.pinnedActionIDs)
+        return allTrackers.filter { ids.contains($0.id) }
     }
 
     func routines(for subject: NestSubject) -> [NestRoutine] {
@@ -744,7 +751,10 @@ final class NesticStore: ObservableObject {
             // system recovery). They must not hold the downloaded nest or
             // its loading indicator hostage. Scheduling is independent of
             // applying the server snapshot.
-            Task { [weak reminderStore] in await reminderStore?.sync() }
+            Task { [weak reminderStore] in
+                await reminderStore?.reconcileLinkedReminders(entries: snapshot.entries, nestID: nestID)
+                await reminderStore?.sync()
+            }
         }
         snapshots = snapshots.filter { key, _ in remoteNests.contains { $0.id.uuidString == key } }
         applySnapshot(snapshot)
@@ -867,7 +877,7 @@ final class NesticStore: ObservableObject {
         selectedNestID = nests.first?.id
         members = []
         subjects = []
-        trackers = []
+        allTrackers = []
         entries = []
         routines = []
         persist()
@@ -1087,7 +1097,8 @@ final class NesticStore: ObservableObject {
         await refreshAfterMutation()
     }
 
-    func createTracker(subjectID: UUID, name: String, valueType: NestValueType, unit: String? = nil, symbol: String? = nil, color: String? = nil, groupName: String? = nil, isPrivate: Bool = false) async throws {
+    @discardableResult
+    func createTracker(subjectID: UUID, name: String, valueType: NestValueType, unit: String? = nil, symbol: String? = nil, color: String? = nil, groupName: String? = nil, isPrivate: Bool = false) async throws -> NestTracker {
         guard var subject = subjects.first(where: { $0.id == subjectID }) else { throw NesticError.message("This item no longer exists.") }
         guard canManageNest || (isPrivate && canLog) else { throw NesticError.message("Only a nest owner or admin can create shared trackers.") }
         let requestGeneration = generation
@@ -1100,6 +1111,7 @@ final class NesticStore: ObservableObject {
         if let index = subjects.firstIndex(where: { $0.id == subject.id }) { subjects[index] = subject }
         persist()
         await refreshAfterMutation()
+        return tracker
     }
 
     func updateTracker(_ tracker: NestTracker, name: String, valueType: NestValueType, unit: String? = nil, symbol: String? = nil, color: String? = nil, groupName: String? = nil) async throws {
@@ -1128,9 +1140,9 @@ final class NesticStore: ObservableObject {
                                                                                         groupName: groupName?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == true ? nil : groupName?.trimmingCharacters(in: .whitespacesAndNewlines)))
         }
         if (tracker.valueType == .photo || tracker.valueType == .health) && updated.valueType != tracker.valueType {
-            entries.filter { $0.actionId == tracker.id }.forEach { NesticEntryPhotoStore.remove(for: $0.id) }
+
         }
-        if let index = trackers.firstIndex(where: { $0.id == tracker.id }) { trackers[index] = updated }
+        if let index = allTrackers.firstIndex(where: { $0.id == tracker.id }) { allTrackers[index] = updated }
         persist()
         await refreshAfterMutation()
     }
@@ -1146,7 +1158,7 @@ final class NesticStore: ObservableObject {
             guard capabilities["selectedTrackerMembers"] == true else { throw NesticError.message("Selected-member sharing requires the updated server.") }
             updated = try await api().put("actions/\(tracker.id)/sharing", body: Request(allowedMemberIDs: selected))
         }
-        if let index = trackers.firstIndex(where: { $0.id == tracker.id }) { trackers[index] = updated }
+        if let index = allTrackers.firstIndex(where: { $0.id == tracker.id }) { allTrackers[index] = updated }
         sharedForecasts.removeAll()
         forecastSnapshots.removeAll()
         persistForecastSnapshots()
@@ -1154,13 +1166,59 @@ final class NesticStore: ObservableObject {
         await refreshAfterMutation()
     }
 
-    func deleteTracker(_ tracker: NestTracker) async throws {
+    func restoreTracker(_ tracker: NestTracker, subject: NestSubject) async throws {
+        guard tracker.isPrivate ? (canLog && tracker.privateOwnerId == currentUser?.id) : canManageNest else { throw NesticError.message("Only an administrator or the restricted tracker’s creator can restore it.") }
+        guard !trackers.contains(where: { $0.id != tracker.id && $0.name == tracker.name && $0.privateOwnerId == tracker.privateOwnerId }) else { throw NesticError.message("An active tracker already uses this name. Rename it before restoring this one.") }
+        let requestGeneration = generation
+        if !isDemo {
+            struct RestoreRequest: Encodable { let entityID: UUID }
+            _ = try await api().data(path: "actions/\(tracker.id)/restore", method: "POST", body: try NestCoding.encoder().encode(RestoreRequest(entityID: subject.id)))
+            try checkGeneration(requestGeneration)
+        }
+        if let index = allTrackers.firstIndex(where: { $0.id == tracker.id }) { allTrackers[index].isArchived = false }
+        if let index = subjects.firstIndex(where: { $0.id == subject.id }), !subjects[index].pinnedActionIDs.contains(tracker.id) { subjects[index].pinnedActionIDs.append(tracker.id) }
+        persist(); await refreshAfterMutation()
+    }
+
+    func clearTrackerHistory(_ tracker: NestTracker) async throws {
+        guard tracker.isPrivate ? (canLog && tracker.privateOwnerId == currentUser?.id) : canManageNest else {
+            throw NesticError.message("Only a nest administrator or the restricted tracker’s creator can clear history.")
+        }
+        let requestGeneration = generation
+        if !isDemo { _ = try await api().data(path: "actions/\(tracker.id)/history", method: "DELETE"); try checkGeneration(requestGeneration) }
+        for entry in entries where entry.actionId == tracker.id {
+            NesticEntryPhotoStore.remove(for: entry.id)
+            (entry.photoUpdates ?? []).forEach { NesticEntryPhotoStore.remove(forPhotoID: $0.id) }
+        }
+        entries.removeAll { $0.actionId == tracker.id }
+        sharedForecasts.removeAll(); forecastSnapshots = []
+        persist()
+        await reminderStore?.resetSchedules(referencing: tracker.id)
+        await refreshAfterMutation()
+    }
+
+    func permanentlyDeleteTracker(_ tracker: NestTracker) async throws {
+        guard tracker.isPrivate ? (canLog && tracker.privateOwnerId == currentUser?.id) : canManageNest else { throw NesticError.message("Only an administrator or the restricted tracker’s creator can delete it.") }
+        let requestGeneration = generation
+        if !isDemo { _ = try await api().data(path: "actions/\(tracker.id)/permanent", method: "DELETE"); try checkGeneration(requestGeneration) }
+        for entry in entries where entry.actionId == tracker.id {
+            NesticEntryPhotoStore.remove(for: entry.id)
+            (entry.photoUpdates ?? []).forEach { NesticEntryPhotoStore.remove(forPhotoID: $0.id) }
+        }
+        try await deleteTracker(tracker, localOnly: true)
+        entries.removeAll { $0.actionId == tracker.id }
+        allTrackers.removeAll { $0.id == tracker.id }
+        persist(); await refreshAfterMutation()
+    }
+
+    func deleteTracker(_ tracker: NestTracker, localOnly: Bool = false) async throws {
         guard trackers.contains(where: { $0.id == tracker.id }) else { return }
         guard tracker.isPrivate ? (canLog && tracker.privateOwnerId == currentUser?.id) : canManageNest else { throw NesticError.message("You can delete your private trackers. Shared trackers require an owner or admin.") }
-        if !isDemo { _ = try await api().data(path: "actions/\(tracker.id)", method: "DELETE") }
-        entries.filter { $0.actionId == tracker.id }.forEach { NesticEntryPhotoStore.remove(for: $0.id) }
-        trackers.removeAll { $0.id == tracker.id }
-        entries.removeAll { $0.actionId == tracker.id }
+        if !isDemo && !localOnly { _ = try await api().data(path: "actions/\(tracker.id)", method: "DELETE") }
+
+        if let index = allTrackers.firstIndex(where: { $0.id == tracker.id }) { allTrackers[index].isArchived = true }
+        sharedForecasts.removeAll()
+        forecastSnapshots = []
         subjects = subjects.map { subject in
             var copy = subject
             copy.pinnedActionIDs.removeAll { $0 == tracker.id }
@@ -1184,7 +1242,8 @@ final class NesticStore: ObservableObject {
         try await createRoutine(name: name, targets: [NestRoutineTarget(entityID: subjectID, items: items)])
     }
 
-    func createRoutine(name: String, targets: [NestRoutineTarget]) async throws {
+    @discardableResult
+    func createRoutine(name: String, targets: [NestRoutineTarget]) async throws -> NestRoutine {
         let nestID = try requireNest()
         guard hasRoutineAccess else { throw NesticError.message("Routines are part of Nestic Pro.") }
         let isPrivate = targets.flatMap(\.items).contains { item in trackers.contains { $0.id == item.trackerID && $0.isPrivate } }
@@ -1206,6 +1265,7 @@ final class NesticStore: ObservableObject {
         routines.append(routine)
         persist()
         await refreshAfterMutation()
+        return routine
     }
 
     func updateRoutine(_ routine: NestRoutine, name: String, items: [NestRoutineItem]) async throws {
@@ -1244,6 +1304,7 @@ final class NesticStore: ObservableObject {
         guard canManageNest || (canLog && routine.isPrivate && routine.privateOwnerId == currentUser?.id) else { throw NesticError.message("You can manage your private routines. Shared routines require an owner or admin.") }
         if !isDemo { _ = try await api().data(path: "routines/\(routine.id)", method: "DELETE") }
         routines.removeAll { $0.id == routine.id }
+        await reminderStore?.removeReminders(referencing: routine.id)
         persist()
         await refreshAfterMutation()
     }
@@ -1281,6 +1342,7 @@ final class NesticStore: ObservableObject {
         entries.sort { $0.occurredAt > $1.occurredAt }
         persist()
         for entry in loggedEntries { await reminderStore?.handleLoggedEntry(entry) }
+        await reminderStore?.handleLoggedRoutine(routine.id, at: date)
         await refreshAfterMutation()
     }
 
@@ -1558,6 +1620,10 @@ final class NesticStore: ObservableObject {
     }
 
     func logFromReminder(subjectID: UUID, trackerID: UUID) async {
+        if let routine = routines.first(where: { $0.id == trackerID }) {
+            do { try await logRoutine(routine) } catch { errorMessage = error.localizedDescription }
+            return
+        }
         guard let tracker = trackers.first(where: { $0.id == trackerID }) else { return }
         do {
             switch tracker.valueType {
@@ -1585,6 +1651,9 @@ final class NesticStore: ObservableObject {
             let trackerID: UUID
             let intervalHours: Double?
             let totalPills: Int?
+            let routineID: UUID?
+            let recurrenceDays: Int?
+            let startFromFirstTracking: Bool?
             let cadence: NesticReminderCadence
             let linkedTrackerID: UUID?
             let delayMinutes: Int
@@ -1594,7 +1663,7 @@ final class NesticStore: ObservableObject {
         }
         let request = Request(subjectID: reminder.subjectID, trackerID: reminder.medicationTrackerID,
                               intervalHours: reminder.intervalHours, totalPills: reminder.totalPills,
-                              cadence: reminder.cadence, linkedTrackerID: reminder.linkedMealTrackerID,
+                              routineID: reminder.routineID, recurrenceDays: reminder.recurrenceDays, startFromFirstTracking: reminder.startFromFirstTracking, cadence: reminder.cadence, linkedTrackerID: reminder.linkedMealTrackerID,
                               delayMinutes: reminder.delayMinutes, anchorDate: reminder.anchorDate,
                               hour: reminder.hour, minute: reminder.minute)
         let response: NestReminderResponse
@@ -1622,6 +1691,17 @@ final class NesticStore: ObservableObject {
         let nestID = try requireNest()
         try await api().delete("nests/\(nestID)/reminders/\(reminder.id)")
         await reminderStore.delete(reminder)
+    }
+
+    func setReminderDelivery(_ mode: String, for reminder: NesticReminder) async throws {
+        guard ["notification", "alarm", "both"].contains(mode), let reminderStore else { return }
+        var updated = reminder; updated.deliveryMode = mode
+        if updated.enabled { try await reminderStore.authorizeDelivery(for: updated) }
+        if isDemo || reminder.isShared != true { try await reminderStore.save(updated); return }
+        let nestID = try requireNest()
+        struct Request: Encodable { let enabled: Bool; let deliveryMode: String }
+        let response: NestReminderResponse = try await api().put("nests/\(nestID)/reminders/\(reminder.id)/notification", body: Request(enabled: reminder.enabled, deliveryMode: mode))
+        await applyReminder(response.reminder(), in: reminderStore, nestID: nestID)
     }
 
     func setReminderNotifications(_ enabled: Bool, for reminder: NesticReminder) async throws {
@@ -1922,6 +2002,11 @@ final class NesticStore: ObservableObject {
         }
     }
 
+    func loadUsageAnalytics(days: Int) async throws -> NesticUsageDashboard {
+        guard currentUser?.isAdmin == true, !isDemo else { throw NesticError.message("Administrator access is required.") }
+        return try await api().get("admin/analytics?days=\(days)")
+    }
+
     func loadAdminDashboard() async throws -> NestAdminDashboard {
         try requireAdminAccess()
         let requestGeneration = generation
@@ -2160,7 +2245,7 @@ final class NesticStore: ObservableObject {
                                                                                          groupName: groupName?.isEmpty == true ? nil : groupName, isPrivate: isPrivate))
             try checkGeneration(requestGeneration)
         }
-        if !trackers.contains(where: { $0.id == tracker.id }) { trackers.append(tracker) }
+        if !trackers.contains(where: { $0.id == tracker.id }) { allTrackers.append(tracker) }
         return tracker
     }
 
@@ -2234,7 +2319,7 @@ final class NesticStore: ObservableObject {
     private func persist() {
         guard let currentUser, let archiveKey else { return }
         if let selectedNestID {
-            snapshots[selectedNestID.uuidString] = NestSnapshot(subjects: subjects, trackers: trackers, entries: entries,
+            snapshots[selectedNestID.uuidString] = NestSnapshot(subjects: subjects, trackers: allTrackers, entries: entries,
                                                                 members: members, routines: routines)
         }
         let archive = NestArchive(user: currentUser, nests: nests, selectedNestID: selectedNestID, snapshots: snapshots)
@@ -2250,7 +2335,7 @@ final class NesticStore: ObservableObject {
         guard !isDemo, let currentUser else { return }
         NesticWatchBridge.shared.publish(serverURL: serverURL, token: token, user: currentUser,
                                          nests: nests, selectedNestID: selectedNestID,
-                                         snapshot: NestSnapshot(subjects: subjects, trackers: trackers,
+                                         snapshot: NestSnapshot(subjects: subjects, trackers: allTrackers,
                                                                 entries: entries, members: members,
                                                                 routines: routines))
     }
@@ -2567,7 +2652,7 @@ final class NesticStore: ObservableObject {
             persistForecastSnapshots()
         }
         subjects = snapshot.subjects
-        trackers = snapshot.trackers
+        allTrackers = snapshot.trackers
         entries = snapshot.entries.sorted { $0.occurredAt > $1.occurredAt }
         members = snapshot.members
         routines = snapshot.routines

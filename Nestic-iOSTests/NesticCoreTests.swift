@@ -4,6 +4,64 @@ import Testing
 
 @MainActor
 struct NesticCoreTests {
+    @Test func routineLoggingKeepsChosenTimeAcrossAllTargets() async throws {
+        let defaults = UserDefaults(suiteName: "routine-time-\(UUID())")!
+        let store = NesticStore(defaults: defaults)
+        store.enterDemo(reset: true)
+        let targets = store.subjects.compactMap { subject -> NestRoutineTarget? in
+            guard let tracker = store.trackers(for: subject).first(where: { $0.valueType == .none }) else { return nil }
+            return NestRoutineTarget(entityID: subject.id, items: [NestRoutineItem(trackerID: tracker.id)])
+        }
+        #expect(!targets.isEmpty)
+        let routine = try await store.createRoutine(name: "Backdated routine", targets: targets)
+        let originalIDs = Set(store.entries.map(\.id))
+        let recordedAt = Date().addingTimeInterval(-3600)
+        try await store.logRoutine(routine, date: recordedAt, note: "Forgot earlier")
+        let added = store.entries.filter { !originalIDs.contains($0.id) }
+        #expect(added.count == targets.count)
+        #expect(added.allSatisfy { $0.occurredAt == recordedAt && $0.note == "Forgot earlier" })
+    }
+
+    @Test func routineReminderSupportsSchedulesAndKeepsItsTarget() throws {
+        let subject = NestSubject(id: UUID(), nestId: UUID(), name: "Me", kind: .person, emoji: "🙂")
+        let routineID = UUID()
+        var draft = ReminderScheduleDraft()
+        draft.schedule = "weekly"
+        var reminder = try draft.makeReminder(nestID: subject.nestId, subject: subject, targetID: routineID, targetName: "Morning", routineID: routineID)
+        #expect(reminder.routineID == routineID)
+        #expect(reminder.recurrenceDays == 7)
+        draft.schedule = "custom"; draft.days = "13"
+        reminder = try draft.makeReminder(nestID: subject.nestId, subject: subject, targetID: routineID, targetName: "Morning", routineID: routineID)
+        #expect(reminder.recurrenceDays == 13)
+        let restored = try NestCoding.decoder().decode(NesticReminder.self, from: NestCoding.encoder().encode(reminder))
+        #expect(restored.routineID == routineID)
+        draft.schedule = "afterDose"; draft.amount = "30"; draft.unit = "minutes"
+        reminder = try draft.makeReminder(nestID: subject.nestId, subject: subject, targetID: routineID, targetName: "Morning", routineID: routineID)
+        #expect(reminder.nextDoseAt == nil)
+        reminder.lastDoseAt = Date(timeIntervalSince1970: 1_780_000_000)
+        #expect(reminder.nextDoseAt == reminder.lastDoseAt?.addingTimeInterval(1800))
+        #expect(reminder.totalPills == nil)
+    }
+
+    @Test func reminderStartAndCustomDaysSurviveSaving() throws {
+        let start = Date(timeIntervalSince1970: 1_780_000_000)
+        var r = NesticReminder(id: UUID(), nestID: UUID(), subjectID: UUID(), subjectName: "Me", medicationTrackerID: UUID(), medicationName: "Check", cadence: .afterDose, delayMinutes: 0, anchorDate: start, hour: 9, minute: 0, intervalHours: 8, startFromFirstTracking: true)
+        #expect(r.nextDoseAt == nil)
+        r.startFromFirstTracking = false
+        #expect(r.nextDoseAt == start.addingTimeInterval(8 * 3600))
+        r.lastDoseAt = start.addingTimeInterval(3600)
+        #expect(r.nextDoseAt == start.addingTimeInterval(9 * 3600))
+        r.cadence = .everyOtherDay
+        r.recurrenceDays = 7
+        let saved = try NestCoding.decoder().decode(NesticReminder.self, from: NestCoding.encoder().encode(r))
+        #expect(saved.recurrenceDays == 7)
+        #expect(saved.startFromFirstTracking == false)
+        #expect(saved.nextDoseAt == nil)
+        r.recurrenceDays = 13
+        let custom = try NestCoding.decoder().decode(NesticReminder.self, from: NestCoding.encoder().encode(r))
+        #expect(custom.recurrenceDays == 13)
+    }
+
     @Test func selectedForecastInputsRespectEveryReader() throws {
         let owner = UUID(), reader = UUID(), nest = UUID()
         let target = NestTracker(id: UUID(), nestId: nest, name: "Selected", valueType: .none, privateOwnerId: owner, allowedMemberIDs: [reader])
@@ -31,6 +89,16 @@ struct NesticCoreTests {
         #expect(r.nextDoseAt != nil)
         let restored = try NestCoding.decoder().decode(NesticReminder.self, from: NestCoding.encoder().encode(r))
         #expect(restored.nextDoseAt == r.nextDoseAt)
+        r.deliveryMode = "alarm"
+        #expect(r.wantsAlarm && !r.wantsNotification)
+        r.deliveryMode = "both"
+        #expect(r.wantsAlarm && r.wantsNotification)
+        #expect(try NestCoding.decoder().decode(NesticReminder.self, from: NestCoding.encoder().encode(r)).deliveryMode == "both")
+        r.intervalHours = 1.0 / 60.0
+        #expect(r.nextDoseAt == r.lastDoseAt?.addingTimeInterval(60))
+        #expect(reminderIntervalLabel(1.0 / 60.0) == "1 minute")
+        #expect(reminderIntervalLabel(0.5) == "30 minutes")
+        #expect(reminderIntervalLabel(48) == "2 days")
     }
     @Test func privateTrackerKeepsItsOwnerWhenEditedAndStored() async throws {
         let store = NesticStore(defaults: isolatedDefaults(), restoreSession: false)
@@ -64,9 +132,30 @@ struct NesticCoreTests {
         #expect(saved.privateOwnerId == routine.privateOwnerId)
         let decoded = try NestCoding.decoder().decode(NestRoutine.self, from: NestCoding.encoder().encode(saved))
         #expect(decoded.isPrivate)
+        try await store.clearTrackerHistory(edited)
+        #expect(!store.entries.contains { $0.actionId == edited.id })
+        #expect(store.trackers.contains { $0.id == edited.id })
+        #expect(store.subjects.first { $0.id == subject.id }?.pinnedActionIDs.contains(edited.id) == true)
+        #expect(store.routines.contains { $0.id == saved.id })
+        #expect(store.tracker(id: edited.id)?.privateOwnerId == store.currentUser?.id)
+        try await store.logRoutine(saved)
         try await store.deleteRoutine(saved)
         try await store.deleteTracker(edited)
         #expect(!store.trackers.contains { $0.id == tracker.id })
+        #expect(store.tracker(id: tracker.id)?.isArchived == true)
+        let archivedRoundTrip = try NestCoding.decoder().decode(NestTracker.self, from: NestCoding.encoder().encode(store.tracker(id: tracker.id)!))
+        #expect(archivedRoundTrip.isArchived == true)
+        #expect(store.entries.contains { $0.actionId == tracker.id })
+        try await store.restoreTracker(store.tracker(id: tracker.id)!, subject: subject)
+        #expect(store.trackers(for: store.subjects.first { $0.id == subject.id }!).contains { $0.id == tracker.id })
+        #expect(store.entries.contains { $0.actionId == tracker.id })
+        _ = try await store.log(subjectID: subject.id, trackerID: tracker.id)
+        try await store.permanentlyDeleteTracker(store.tracker(id: tracker.id)!)
+        #expect(store.tracker(id: tracker.id) == nil)
+        #expect(!store.entries.contains { $0.actionId == tracker.id })
+        #expect(!store.subjects.contains { $0.pinnedActionIDs.contains(tracker.id) })
+
+
     }
 
     @Test func widgetDetailLinkOpensFormWithoutRecordingAnEmptyEvent() async throws {
@@ -334,7 +423,8 @@ struct NesticCoreTests {
         #expect(store.trackers.first { $0.id == pee.id }?.groupName == nil)
         try await store.deleteTracker(renamed)
         #expect(!store.trackers.contains { $0.id == pee.id })
-        #expect(!store.entries.contains { $0.actionId == pee.id })
+        #expect(store.entries.contains { $0.actionId == pee.id })
+        #expect(store.tracker(id: pee.id)?.isArchived == true)
         #expect(!store.subjects.contains { $0.pinnedActionIDs.contains(pee.id) })
     }
 

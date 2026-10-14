@@ -10,6 +10,7 @@ struct AdminDashboardView: View {
         List {
             if store.currentUser?.isAdmin == true, !store.isDemo {
                 Section {
+                    NavigationLink("Traffic & growth") { AdminAnalyticsView() }
                     NavigationLink("Feedback inbox") { AdminFeedbackView() }
                     NavigationLink("User accounts") { AdminUsersView() }
                 }

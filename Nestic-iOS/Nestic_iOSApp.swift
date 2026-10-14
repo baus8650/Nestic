@@ -3,6 +3,7 @@ import Combine
 import AppIntents
 import UserNotifications
 import BackgroundTasks
+import AlarmKit
 
 @main
 struct Nestic_iOSApp: App {
@@ -33,6 +34,7 @@ struct Nestic_iOSApp: App {
                 .tint(NesticTheme.forest)
                 .preferredColorScheme(NesticAppearanceMode(rawValue: appearance)?.colorScheme)
                 .task {
+                    if !ProcessInfo.processInfo.arguments.contains("--demo") { Task { await NesticUsageAnalytics.send(serverURL:store.serverURL) } }
                     NesticWidgetActionStore.store = store
                     NesticWatchBridge.shared.start()
                     let notificationCenter = UNUserNotificationCenter.current()
@@ -95,6 +97,7 @@ struct Nestic_iOSApp: App {
                 .onChange(of: scenePhase) { _, phase in
                     if phase == .active && store.isAuthenticated {
                         Task {
+                            if !store.isDemo { await NesticUsageAnalytics.send(serverURL:store.serverURL) }
                             await store.appDidBecomeActive()
                             await reminders.sync()
                         }
@@ -141,7 +144,7 @@ enum NesticReminderCadence: String, Codable, CaseIterable, Identifiable, Sendabl
 
     var title: String {
         switch self {
-        case .afterDose: "Hours after the last dose"
+        case .afterDose: "Interval after the last update"
         case .afterMeal: "After a meal is logged"
         case .everyOtherDay: "Every other day"
         case .monthly: "Monthly"
@@ -176,11 +179,17 @@ struct NesticReminder: Codable, Hashable, Identifiable, Sendable {
     var totalPills: Int?
     var lastDoseAt: Date?
     var pillsTaken: Double?
+    var deliveryMode: String?
+    var routineID: UUID?
+    var recurrenceDays: Int?
+    var startFromFirstTracking: Bool?
+    var wantsAlarm: Bool { deliveryMode == "alarm" || deliveryMode == "both" }
+    var wantsNotification: Bool { deliveryMode != "alarm" }
 
     var nextDoseAt: Date? {
-        guard cadence == .afterDose, let lastDoseAt, let hours = intervalHours, hours > 0,
+        guard cadence == .afterDose, let base = lastDoseAt ?? (startFromFirstTracking == false ? anchorDate : nil), let hours = intervalHours, hours > 0,
               totalPills == nil || (pillsTaken ?? 0) < Double(totalPills!) else { return nil }
-        return lastDoseAt.addingTimeInterval(hours * 3600)
+        return base.addingTimeInterval(hours * 3600)
     }
 }
 
@@ -216,14 +225,16 @@ final class NesticReminderStore: ObservableObject {
     }
 
     func save(_ reminder: NesticReminder) async throws {
-        try await ensureAuthorization()
+        let linkedDates = linkedFireDates(reminder)
+        if reminder.enabled { try await ensureAuthorization(reminder) }
         await removePendingRequests(prefix: requestPrefix(for: reminder))
         reminders.removeAll { $0.id == reminder.id }
         reminders.append(reminder)
         persist()
         notifyChanged()
-        if reminder.enabled, reminder.cadence != .afterMeal {
-            try await scheduleRecurring(reminder)
+        if reminder.enabled {
+            if reminder.cadence != .afterMeal { try await scheduleRecurring(reminder) }
+            else { for (identifier, date) in linkedDates { try await deliver(notificationRequest(reminder: reminder, identifier: identifier, date: date), reminder: reminder) } }
         }
     }
 
@@ -246,7 +257,7 @@ final class NesticReminderStore: ObservableObject {
         let remoteByID = Dictionary(uniqueKeysWithValues: remote.map { ($0.id, $0) })
         obsoleteReminders += reminders.filter { old in
             old.nestID == nestID && old.isShared == true &&
-            (remoteByID[old.id] == nil || remoteByID[old.id]?.cadence != old.cadence)
+            (remoteByID[old.id] == nil || remoteByID[old.id]?.cadence != old.cadence || remoteByID[old.id]?.deliveryMode != old.deliveryMode)
         }
         reminders.removeAll { $0.nestID == nestID && $0.isShared == true }
         reminders.append(contentsOf: remote.map { reminder in
@@ -264,7 +275,7 @@ final class NesticReminderStore: ObservableObject {
         persist()
         notifyChanged()
         if enabled, reminder.cadence != .afterMeal {
-            try await ensureAuthorization()
+            try await ensureAuthorization(reminder)
             try await scheduleRecurring(reminders[index])
         }
     }
@@ -273,10 +284,12 @@ final class NesticReminderStore: ObservableObject {
         let obsolete = obsoleteReminders
         obsoleteReminders.removeAll()
         for reminder in obsolete + reminders.filter({ !$0.enabled }) {
+            let dates = linkedFireDates(reminder)
             await removePendingRequests(prefix: requestPrefix(for: reminder))
+            if let replacement = reminders.first(where: { $0.id == reminder.id && $0.enabled && $0.cadence == .afterMeal }) {
+                for (identifier, date) in dates { try? await deliver(notificationRequest(reminder: replacement, identifier: identifier, date: date), reminder: replacement) }
+            }
         }
-        let settings = await notificationSettings()
-        guard settings.authorizationStatus == .authorized || settings.authorizationStatus == .provisional else { return }
         for reminder in reminders where reminder.enabled && reminder.cadence != .afterMeal {
             if reminder.cadence == .afterDose, let due = reminder.nextDoseAt, due <= Date(),
                defaults.double(forKey: "nestic.doseReminder.\(reminder.id).lastScheduled") == due.timeIntervalSince1970 { continue }
@@ -286,10 +299,17 @@ final class NesticReminderStore: ObservableObject {
     }
 
     func clearAll() async {
+        await removePendingRequests(prefix: Self.requestPrefix)
         let requests = await pendingRequests()
         center.removePendingNotificationRequests(withIdentifiers: requests.map(\.identifier))
         reminders.removeAll()
         persist()
+    }
+
+    func resetSchedules(referencing trackerID: UUID) async {
+        for reminder in reminders where reminder.medicationTrackerID == trackerID || reminder.linkedMealTrackerID == trackerID {
+            await removePendingRequests(prefix: requestPrefix(for: reminder))
+        }
     }
 
     func removeReminders(referencing trackerID: UUID) async {
@@ -308,15 +328,32 @@ final class NesticReminderStore: ObservableObject {
         }
     }
 
-    func updateDoseReminders(entries: [NestEntry], nestID: UUID) async {
-        for index in reminders.indices where reminders[index].nestID == nestID && reminders[index].cadence == .afterDose {
-            let r = reminders[index]
-            let doses = entries.filter { $0.entityId == r.subjectID && $0.actionId == r.medicationTrackerID && $0.occurredAt >= r.anchorDate && $0.occurredAt <= Date() && $0.valueBool != false && ($0.valueNumber ?? 1) > 0 }
-            reminders[index].lastDoseAt = doses.map(\.occurredAt).max()
-            reminders[index].pillsTaken = doses.reduce(0) { $0 + max(0, $1.valueNumber ?? 1) }
+    func handleLoggedRoutine(_ id: UUID, at date: Date) async {
+        for index in reminders.indices where reminders[index].routineID == id {
+            if reminders[index].lastDoseAt == nil || date > reminders[index].lastDoseAt! { reminders[index].lastDoseAt = date }
         }
         persist()
         await sync()
+    }
+
+    func updateDoseReminders(entries: [NestEntry], nestID: UUID) async {
+        for index in reminders.indices where reminders[index].nestID == nestID && reminders[index].cadence == .afterDose && reminders[index].routineID == nil {
+            let r = reminders[index]
+            let doses = entries.filter { $0.entityId == r.subjectID && $0.actionId == r.medicationTrackerID && $0.occurredAt >= r.anchorDate && $0.occurredAt <= Date() && (r.totalPills == nil || ($0.valueBool != false && ($0.valueNumber ?? 1) > 0)) }
+            reminders[index].lastDoseAt = doses.map(\.occurredAt).max()
+            reminders[index].pillsTaken = doses.reduce(0) { $0 + max(0, $1.valueNumber ?? 1) }
+        }
+        await reconcileLinkedReminders(entries: entries, nestID: nestID)
+        persist()
+        await sync()
+    }
+
+    func reconcileLinkedReminders(entries: [NestEntry], nestID: UUID) async {
+        for reminder in reminders where reminder.nestID == nestID && reminder.cadence == .afterMeal {
+            if !entries.contains(where: { $0.entityId == reminder.subjectID && $0.actionId == reminder.linkedMealTrackerID }) {
+                await removePendingRequests(prefix: requestPrefix(for: reminder))
+            }
+        }
     }
 
     func handleLoggedEntry(_ entry: NestEntry) async {
@@ -334,7 +371,7 @@ final class NesticReminderStore: ObservableObject {
                 identifier: "\(requestPrefix(for: reminder))entry-\(entry.id.uuidString)",
                 date: fireDate
             )
-            try? await center.add(request)
+            try? await deliver(request, reminder: reminder)
         }
     }
 
@@ -351,7 +388,17 @@ final class NesticReminderStore: ObservableObject {
         await handleLoggedEntry(entry)
     }
 
-    private func ensureAuthorization() async throws {
+    func authorizeDelivery(for reminder: NesticReminder) async throws { try await ensureAuthorization(reminder) }
+
+    private func ensureAuthorization(_ reminder: NesticReminder) async throws {
+        if reminder.wantsAlarm {
+            guard #available(iOS 26.0, *) else { throw NSError(domain: "Nestic", code: 26, userInfo: [NSLocalizedDescriptionKey: "Alarms require iOS 26 or later. Choose notifications on this device."]) }
+            let manager = AlarmKit.AlarmManager.shared
+            let state = manager.authorizationState == .notDetermined ? try await manager.requestAuthorization() : manager.authorizationState
+            guard state == .authorized else { throw NSError(domain: "Nestic", code: 1, userInfo: [NSLocalizedDescriptionKey: "Enable Nestic alarms in Settings to use alarm delivery."]) }
+        }
+        guard reminder.wantsNotification else { return }
+
         let settings = await notificationSettings()
         switch settings.authorizationStatus {
         case .denied:
@@ -380,7 +427,7 @@ final class NesticReminderStore: ObservableObject {
                 let request = notificationRequest(reminder: reminder,
                     identifier: "\(requestPrefix(for: reminder))dose",
                     date: max(due, Date().addingTimeInterval(1)))
-                try await center.add(request)
+                try await deliver(request, reminder: reminder)
                 defaults.set(dose, forKey: key)
             }
         case .afterMeal:
@@ -390,6 +437,7 @@ final class NesticReminderStore: ObservableObject {
 
     private func scheduleEveryOtherDay(_ reminder: NesticReminder) async throws {
         let calendar = Calendar.current
+        let days = reminder.recurrenceDays ?? 2
         guard var next = calendar.date(
             bySettingHour: reminder.hour,
             minute: reminder.minute,
@@ -397,20 +445,20 @@ final class NesticReminderStore: ObservableObject {
             of: calendar.startOfDay(for: reminder.anchorDate)
         ) else { return }
         while next <= Date() {
-            next = calendar.date(byAdding: .day, value: 2, to: next) ?? next.addingTimeInterval(2 * 86_400)
+            next = calendar.date(byAdding: .day, value: days, to: next) ?? next.addingTimeInterval(Double(days) * 86_400)
         }
         // iOS limits an app to 64 pending local notifications. Keep a
         // rolling window for each recurring reminder and divide that budget
         // across multiple every-other-day schedules.
         let occurrenceCount = recurringOccurrenceCount(maximum: 30)
         for index in 0..<occurrenceCount {
-            let date = calendar.date(byAdding: .day, value: index * 2, to: next) ?? next
+            let date = calendar.date(byAdding: .day, value: index * days, to: next) ?? next
             let request = notificationRequest(
                 reminder: reminder,
                 identifier: "\(requestPrefix(for: reminder))\(Int(date.timeIntervalSince1970))",
                 date: date
             )
-            try await center.add(request)
+            try await deliver(request, reminder: reminder)
         }
     }
 
@@ -428,7 +476,7 @@ final class NesticReminderStore: ObservableObject {
             let month = calendar.date(byAdding: .month, value: index, to: next) ?? next
             let date = monthlyDate(monthStart: month, desiredDay: desiredDay, hour: reminder.hour, minute: reminder.minute, calendar: calendar)
             let request = notificationRequest(reminder: reminder, identifier: "\(requestPrefix(for: reminder))\(Int(date.timeIntervalSince1970))", date: date)
-            try await center.add(request)
+            try await deliver(request, reminder: reminder)
         }
     }
 
@@ -447,7 +495,7 @@ final class NesticReminderStore: ObservableObject {
             let year = calendar.date(byAdding: .year, value: index, to: next) ?? next
             let date = yearlyDate(yearStart: year, desiredMonth: desiredMonth, desiredDay: desiredDay, hour: reminder.hour, minute: reminder.minute, calendar: calendar)
             let request = notificationRequest(reminder: reminder, identifier: "\(requestPrefix(for: reminder))\(Int(date.timeIntervalSince1970))", date: date)
-            try await center.add(request)
+            try await deliver(request, reminder: reminder)
         }
     }
 
@@ -527,7 +575,47 @@ final class NesticReminderStore: ObservableObject {
         }
     }
 
+    private func linkedFireDates(_ reminder: NesticReminder) -> [String: Date] {
+        guard reminder.cadence == .afterMeal else { return [:] }
+        let dates = defaults.dictionary(forKey: "nestic.reminderFireDates") as? [String: Double] ?? [:]
+        return dates.filter { $0.key.hasPrefix(requestPrefix(for: reminder)) && $0.value > Date().timeIntervalSince1970 }.mapValues { Date(timeIntervalSince1970: $0) }
+    }
+
+    private func deliver(_ request: UNNotificationRequest, reminder: NesticReminder) async throws {
+        if reminder.wantsAlarm {
+            let nextDate = (request.trigger as? UNTimeIntervalNotificationTrigger)?.nextTriggerDate() ?? (request.trigger as? UNCalendarNotificationTrigger)?.nextTriggerDate()
+            guard #available(iOS 26.0, *), AlarmKit.AlarmManager.shared.authorizationState == .authorized,
+                  let date = nextDate else {
+                throw NSError(domain: "Nestic", code: 1, userInfo: [NSLocalizedDescriptionKey: "Alarm access is unavailable on this device."])
+            }
+            let id = UUID()
+            let alert = AlarmPresentation.Alert(title: "Log \(reminder.medicationName) for \(reminder.subjectName)", stopButton: AlarmButton(text: "Stop", textColor: .white, systemImageName: "stop.fill"))
+            let attributes = AlarmAttributes<NesticAlarmMetadata>(presentation: AlarmPresentation(alert: alert), metadata: NesticAlarmMetadata(), tintColor: .green)
+            _ = try await AlarmKit.AlarmManager.shared.schedule(id: id, configuration: .alarm(schedule: .fixed(date), attributes: attributes))
+            var ids = defaults.dictionary(forKey: "nestic.alarmIDs") as? [String: String] ?? [:]
+            ids[request.identifier] = id.uuidString
+            defaults.set(ids, forKey: "nestic.alarmIDs")
+        }
+        if reminder.wantsNotification { try await center.add(request) }
+        if let date = (request.trigger as? UNTimeIntervalNotificationTrigger)?.nextTriggerDate() ?? (request.trigger as? UNCalendarNotificationTrigger)?.nextTriggerDate() {
+            var dates = defaults.dictionary(forKey: "nestic.reminderFireDates") as? [String: Double] ?? [:]
+            dates[request.identifier] = date.timeIntervalSince1970
+            defaults.set(dates, forKey: "nestic.reminderFireDates")
+        }
+    }
+
     private func removePendingRequests(prefix: String) async {
+        let dates = defaults.dictionary(forKey: "nestic.reminderFireDates") as? [String: Double] ?? [:]
+        defaults.set(dates.filter { !$0.key.hasPrefix(prefix) }, forKey: "nestic.reminderFireDates")
+        if #available(iOS 26.0, *) {
+            var ids = defaults.dictionary(forKey: "nestic.alarmIDs") as? [String: String] ?? [:]
+            for (key, value) in ids where key.hasPrefix(prefix) {
+                if let id = UUID(uuidString: value) { try? AlarmKit.AlarmManager.shared.cancel(id: id) }
+                ids.removeValue(forKey: key)
+            }
+            defaults.set(ids, forKey: "nestic.alarmIDs")
+        }
+
         let requests = await pendingRequests()
         let identifiers = requests.map(\.identifier).filter { $0.hasPrefix(prefix) }
         center.removePendingNotificationRequests(withIdentifiers: identifiers)
@@ -565,3 +653,12 @@ final class NesticNotificationDelegate: NSObject, UNUserNotificationCenterDelega
 
     private static let logActionIdentifier = NesticReminderStore.logActionIdentifier
 }
+
+func reminderIntervalLabel(_ hours: Double) -> String {
+    let value = hours < 1 ? hours * 60 : hours >= 24 && hours.truncatingRemainder(dividingBy: 24) == 0 ? hours / 24 : hours
+    let unit = hours < 1 ? "minute" : hours >= 24 && hours.truncatingRemainder(dividingBy: 24) == 0 ? "day" : "hour"
+    return "\(String(format: "%g", value)) \(unit)\(value == 1 ? "" : "s")"
+}
+
+@available(iOS 26.0, *)
+private struct NesticAlarmMetadata: AlarmMetadata {}

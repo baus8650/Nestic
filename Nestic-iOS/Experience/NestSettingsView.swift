@@ -6,6 +6,7 @@ struct NestSettingsView: View {
     @EnvironmentObject private var store: NesticStore
     @EnvironmentObject private var subscription: NesticSubscriptionStore
     @EnvironmentObject private var reminders: NesticReminderStore
+    @AppStorage("nestic.shareUsageAnalytics") private var shareUsageAnalytics = false
     @State private var showTutorial = false
     @State private var showSwitcher = false
     @State private var showInvite = false
@@ -34,6 +35,11 @@ struct NestSettingsView: View {
 
     var body: some View {
         List {
+            Section {
+                Toggle("Share optional usage analytics",isOn:$shareUsageAnalytics)
+                    .onChange(of:shareUsageAnalytics) { _, enabled in if enabled && !store.isDemo { Task { await NesticUsageAnalytics.send(serverURL:store.serverURL,path:"settings") } } }
+            } header: { Text("Privacy") } footer: { Text("Helps Nestic understand traction using app opens, device/app versions, language, time zone, and approximate country, region, and city. Only Nestic administrators see analytics. No tracker contents, precise location, or raw IP addresses are stored. You can turn this off at any time.") }
+
             Section {
                 VStack(spacing: 12) {
                     NestMark().frame(width: 74, height: 78)
@@ -89,7 +95,7 @@ struct NestSettingsView: View {
                     Button { showReminderEditor = true } label: {
                         Label("Add a reminder", systemImage: "plus")
                     }
-                    Text("Schedules are shared with the nest. Each member can turn their own notifications on or off without changing reminders for anyone else.")
+                    Text("Reminders follow the tracker’s visibility. Each member chooses notification, alarm, or both for their account. Alarms require iOS 26 or later and permission on each device.")
                         .font(.footnote).foregroundStyle(.secondary)
                 }
 
@@ -138,6 +144,11 @@ struct NestSettingsView: View {
                         Button("Restore purchases") { Task { await subscription.restorePurchases() } }
                             .disabled(subscription.isLoading)
                     }
+                }
+            }
+            if store.allTrackers.contains(where: { $0.isArchived == true }) {
+                Section("Tracker archive") {
+                    NavigationLink("Archived trackers") { ArchivedTrackersView() }
                 }
             }
             Section("Appearance") {
@@ -485,6 +496,8 @@ struct ReminderEditorSheet: View {
     @EnvironmentObject private var reminders: NesticReminderStore
     @Environment(\.dismiss) private var dismiss
     let reminder: NesticReminder?
+    @State private var routineID: UUID?
+    @State private var draft: ReminderScheduleDraft
     @State private var subjectID: UUID?
     @State private var medicationTrackerID: UUID?
     @State private var cadence: NesticReminderCadence
@@ -492,19 +505,26 @@ struct ReminderEditorSheet: View {
     @State private var delayMinutes: Int
     @State private var anchorDate: Date
     @State private var intervalHours: String = "8"
+    @State private var intervalUnit: String = "hours"
+    private var resolvedIntervalHours: Double? { Double(intervalHours).map { $0 * (intervalUnit == "minutes" ? 1.0 / 60.0 : intervalUnit == "days" ? 24 : 1) } }
     @State private var totalPills: String = ""
     @State private var busy = false
     @State private var error: String?
 
-    init(reminder: NesticReminder? = nil) {
+    init(reminder: NesticReminder? = nil, initialSubjectID: UUID? = nil, initialTrackerID: UUID? = nil, initialDate: Date? = nil) {
         self.reminder = reminder
-        _subjectID = State(initialValue: reminder?.subjectID)
-        _medicationTrackerID = State(initialValue: reminder?.medicationTrackerID)
-        _cadence = State(initialValue: reminder?.cadence ?? .everyOtherDay)
+        _routineID = State(initialValue: reminder?.routineID)
+        _draft = State(initialValue: ReminderScheduleDraft(reminder))
+        _subjectID = State(initialValue: reminder?.subjectID ?? initialSubjectID)
+        _medicationTrackerID = State(initialValue: reminder?.medicationTrackerID ?? initialTrackerID)
+        _cadence = State(initialValue: reminder?.cadence ?? (initialTrackerID == nil ? .everyOtherDay : .afterDose))
         _mealTrackerID = State(initialValue: reminder?.linkedMealTrackerID)
         _delayMinutes = State(initialValue: reminder?.delayMinutes ?? 5)
-        _anchorDate = State(initialValue: reminder?.anchorDate ?? Calendar.current.startOfDay(for: Date()))
-        _intervalHours = State(initialValue: String(reminder?.intervalHours ?? 8))
+        _anchorDate = State(initialValue: reminder?.anchorDate ?? initialDate ?? Calendar.current.startOfDay(for: Date()))
+        let hours = reminder?.intervalHours ?? 8
+        let unit = hours < 1 ? "minutes" : hours >= 24 && hours.truncatingRemainder(dividingBy: 24) == 0 ? "days" : "hours"
+        _intervalUnit = State(initialValue: unit)
+        _intervalHours = State(initialValue: String(format: "%g", hours * (unit == "minutes" ? 60 : unit == "days" ? 1.0 / 24 : 1)))
         _totalPills = State(initialValue: reminder?.totalPills.map(String.init) ?? "")
     }
 
@@ -538,12 +558,16 @@ struct ReminderEditorSheet: View {
                             Label("\(subject.emoji)  \(subject.name)", systemImage: "person.fill").tag(subject.id)
                         }
                     }
-                    Picker("Tracker to remind me about", selection: Binding(
-                        get: { medicationTrackerID ?? trackers.first?.id ?? UUID() },
-                        set: { medicationTrackerID = $0 }
-                    )) {
-                        ForEach(trackers) { tracker in
-                            Label(tracker.name, systemImage: tracker.valueType.symbol).tag(tracker.id)
+                    Picker("Remind me about", selection: $routineID) {
+                        Text("An individual tracker").tag(UUID?.none)
+                        ForEach(store.routines.filter { routine in routine.targets.contains { $0.entityID == subject?.id } }) { routine in
+                            Text("Routine · \(routine.name)").tag(Optional(routine.id))
+                        }
+                    }
+                    if routineID == nil {
+                        Picker("Tracker", selection: $medicationTrackerID) {
+                            Text("Choose a tracker").tag(UUID?.none)
+                            ForEach(trackers) { Text($0.name).tag(Optional($0.id)) }
                         }
                     }
                 } header: {
@@ -552,38 +576,7 @@ struct ReminderEditorSheet: View {
                     Text("Use a simple update tracker for one-tap logging from the notification. Trackers that require a number or yes/no value will open Nestic for the full entry.")
                 }
 
-                Section("Schedule") {
-                    Picker("When", selection: $cadence) {
-                        ForEach(NesticReminderCadence.allCases) { option in
-                            Text(option.title).tag(option)
-                        }
-                    }
-                    if cadence == .afterDose {
-                        TextField("Hours between doses", text: $intervalHours).keyboardType(.decimalPad)
-                        TextField("Total pills · optional", text: $totalPills).keyboardType(.numberPad)
-                        DatePicker("Count pills from", selection: $anchorDate, displayedComponents: [.date, .hourAndMinute])
-                        Text("Each logged dose restarts the timer. No reminder is scheduled until the first dose. A simple update counts as one pill; a number records pills taken. Leave the total blank to continue indefinitely.").font(.footnote).foregroundStyle(.secondary)
-                    } else if cadence == .afterMeal {
-                        Picker("Meal tracker", selection: Binding(
-                            get: { mealTrackerID ?? trackers.first?.id ?? UUID() },
-                            set: { mealTrackerID = $0 }
-                        )) {
-                            ForEach(trackers.filter { $0.id != medicationTrackerID }) { tracker in
-                                Label(tracker.name, systemImage: tracker.valueType.symbol).tag(tracker.id)
-                            }
-                        }
-                        Picker("Notify", selection: $delayMinutes) {
-                            Text("Immediately").tag(0)
-                            Text("5 minutes later").tag(5)
-                            Text("10 minutes later").tag(10)
-                            Text("15 minutes later").tag(15)
-                        }
-                    } else {
-                        DatePicker("First reminder", selection: $anchorDate, displayedComponents: [.date, .hourAndMinute])
-                        Text(scheduleHelpText)
-                            .font(.footnote).foregroundStyle(.secondary)
-                    }
-                }
+                ReminderScheduleFields(draft: $draft, trackers: trackers, allowsPillTotal: routineID == nil, isRoutine: routineID != nil)
 
                 if let error {
                     Section {
@@ -606,6 +599,7 @@ struct ReminderEditorSheet: View {
                 }
             }
             .onChange(of: subjectID) { _, _ in
+                if let routineID, !store.routines.contains(where: { $0.id == routineID && $0.targets.contains { $0.entityID == subjectID } }) { self.routineID = nil }
                 if !trackers.contains(where: { $0.id == medicationTrackerID }) {
                     medicationTrackerID = trackers.first?.id
                 }
@@ -619,52 +613,27 @@ struct ReminderEditorSheet: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button(busy ? "Saving…" : "Save") { save() }
-                        .disabled(busy || subject == nil || medicationTracker == nil ||
-                                  (cadence == .afterMeal && mealTracker == nil))
+                        .disabled(busy || subject == nil || (routineID == nil && medicationTracker == nil))
                 }
             }
         }
     }
 
     private func save() {
-        guard let nestID = store.selectedNestID,
-              let subject,
-              let medicationTracker else { return }
-        if cadence == .afterDose {
-            guard let hours = Double(intervalHours), hours.isFinite, (0.25...720).contains(hours),
-                  totalPills.isEmpty || (Int(totalPills).map { (1...100_000).contains($0) } ?? false),
-                  [.none, .number, .boolean].contains(medicationTracker.valueType) else {
-                error = "Choose a simple dose or pill-count tracker, an interval from 0.25 to 720 hours, and a positive total."
-                return
-            }
-        }
-        let calendar = Calendar.current
-        let time = calendar.dateComponents([.hour, .minute], from: anchorDate)
-        let updated = NesticReminder(
-            id: reminder?.id ?? UUID(),
-            nestID: nestID,
-            subjectID: subject.id,
-            subjectName: subject.name,
-            medicationTrackerID: medicationTracker.id,
-            medicationName: medicationTracker.name,
-            cadence: cadence,
-            linkedMealTrackerID: cadence == .afterMeal ? mealTracker?.id : nil,
-            linkedMealName: cadence == .afterMeal ? mealTracker?.name : nil,
-            delayMinutes: cadence == .afterMeal ? delayMinutes : 0,
-            anchorDate: anchorDate,
-            hour: time.hour ?? 9,
-            minute: time.minute ?? 0,
-            enabled: reminder?.enabled ?? true,
-            isShared: reminder?.isShared,
-            intervalHours: cadence == .afterDose ? Double(intervalHours) : nil,
-            totalPills: cadence == .afterDose ? Int(totalPills) : nil
-        )
+        guard let nestID = store.selectedNestID, let subject else { return }
+        let routine = store.routines.first { $0.id == routineID }
+        guard routine != nil || medicationTracker != nil else { return }
+        let updated: NesticReminder
+        do {
+            updated = try draft.makeReminder(nestID: nestID, subject: subject, targetID: routine?.id ?? medicationTracker!.id, targetName: routine?.name ?? medicationTracker!.name, routineID: routine?.id, previous: reminder)
+        } catch { self.error = error.localizedDescription; return }
         busy = true
         error = nil
         Task {
             defer { busy = false }
             do {
                 try await store.saveReminder(updated, isNew: reminder == nil)
+                if let saved = reminders.reminders(for: nestID).first(where: { $0.medicationTrackerID == updated.medicationTrackerID && $0.subjectID == subject.id && $0.cadence == updated.cadence }) { try await store.setReminderDelivery(draft.delivery, for: saved) }
                 dismiss()
             } catch {
                 self.error = error.localizedDescription
@@ -675,13 +644,13 @@ struct ReminderEditorSheet: View {
     private var scheduleHelpText: String {
         switch cadence {
         case .everyOtherDay:
-            "Nestic will continue this schedule every two days and refresh upcoming reminders as your time zone changes."
+            "Nestic will continue this schedule every \(reminder?.recurrenceDays ?? 2) days and refresh upcoming reminders as your time zone changes."
         case .monthly:
             "Nestic will remind you on this day each month. Dates such as the 31st use the last day of shorter months."
         case .yearly:
             "Nestic will remind you on this month and day each year. February 29 uses February 28 in non-leap years."
         case .afterDose:
-            "Each logged dose restarts the reminder interval."
+            "Each logged update restarts the reminder interval."
         case .afterMeal:
             "Nestic will notify you after the linked meal tracker is logged."
         }
@@ -1188,5 +1157,75 @@ struct NesticProPaywall: View {
                 Text(detail).font(.caption).foregroundStyle(.secondary)
             }
         }
+    }
+}
+
+
+private struct ArchivedTrackersView: View {
+    @EnvironmentObject private var store: NesticStore
+    @State private var clearing: NestTracker?
+    @State private var deleting: NestTracker?
+    @State private var restoring: NestTracker?
+    @State private var restoreSubject: NestSubject?
+    @State private var selectedEntry: NestEntry?
+    @State private var error: String?
+    var body: some View {
+        List {
+            ForEach(store.allTrackers.filter { $0.isArchived == true }) { tracker in
+                Section {
+                    DisclosureGroup {
+                        let entries = store.entries.filter { $0.actionId == tracker.id }.sorted { $0.occurredAt > $1.occurredAt }
+                        if entries.isEmpty { Text("No recorded history").foregroundStyle(.secondary) }
+                        ForEach(entries) { entry in
+                            Button { selectedEntry = entry } label: {
+                                VStack(alignment: .leading) {
+                                    Text(store.subjects.first { $0.id == entry.entityId }?.name ?? "Update")
+                                    Text(entry.occurredAt, format: .dateTime.month().day().year().hour().minute()).font(.caption).foregroundStyle(.secondary)
+                                }
+                            }
+                        }
+                    } label: {
+                        VStack(alignment: .leading) {
+                            Text(tracker.name)
+                            Text(tracker.isPrivate ? tracker.privacyLabel : "Everyone").font(.caption).foregroundStyle(.secondary)
+                        }
+                    }
+                    if tracker.isPrivate ? (store.canLog && tracker.privateOwnerId == store.currentUser?.id) : store.canManageNest {
+                        Menu("Restore tracker…") {
+                            ForEach(store.subjects) { subject in
+                                Button("Restore for \(subject.name)") { restoring = tracker; restoreSubject = subject }
+                            }
+                        }
+                        Button("Clear history…", role: .destructive) { clearing = tracker }
+                        Button("Delete tracker permanently…", role: .destructive) { deleting = tracker }
+                    }
+                }
+            }
+            if !store.isDemo { Button("Load older history") { Task { try? await store.loadOlderEntries() } } }
+        }
+        .navigationTitle("Archived trackers")
+        .sheet(item: $selectedEntry) { EntryDetailSheet(entry: $0) }
+        .alert("Restore \(restoring?.name ?? "tracker")?", isPresented: Binding(get: { restoring != nil }, set: { if !$0 { restoring = nil } })) {
+            Button("Restore tracker") {
+                guard let tracker = restoring, let subject = restoreSubject else { return }; restoring = nil
+                Task { do { try await store.restoreTracker(tracker, subject: subject) } catch { self.error = error.localizedDescription } }
+            }
+            Button("Cancel", role: .cancel) { restoring = nil }
+        } message: { Text("This makes the tracker active and adds a quick-log shortcut for \(restoreSubject?.name ?? "this subject"). Saved history, photos, and sharing restrictions stay. Previously removed routines and reminder schedules are not recreated; set those up again if needed.") }
+        .alert("Permanently delete \(deleting?.name ?? "tracker")?", isPresented: Binding(get: { deleting != nil }, set: { if !$0 { deleting = nil } })) {
+            Button("Delete tracker and history", role: .destructive) {
+                guard let tracker = deleting else { return }; deleting = nil
+                Task { do { try await store.permanentlyDeleteTracker(tracker) } catch { self.error = error.localizedDescription } }
+            }
+            Button("Cancel", role: .cancel) { deleting = nil }
+        } message: { Text("This permanently deletes the tracker and every update, note, and photo across all subjects in this nest. Quick-log shortcuts, its reminders, and its routine items are removed. Unlike archiving, nothing is kept for restoration. This cannot be undone.") }
+        .alert("Permanently clear history?", isPresented: Binding(get: { clearing != nil }, set: { if !$0 { clearing = nil } })) {
+            Button("Clear history", role: .destructive) {
+                guard let tracker = clearing else { return }; clearing = nil
+                Task { do { try await store.clearTrackerHistory(tracker) } catch { self.error = error.localizedDescription } }
+            }
+            Button("Cancel", role: .cancel) { clearing = nil }
+        } message: { Text("Every update, note, and photo for this tracker across all subjects in this nest will be permanently removed. The archived tracker stays. This cannot be undone.") }
+        .alert("Tracker action failed", isPresented: Binding(get: { error != nil }, set: { if !$0 { error = nil } })) { Button("OK") { error = nil } } message: { Text(error ?? "") }
     }
 }

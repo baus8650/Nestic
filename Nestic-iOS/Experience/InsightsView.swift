@@ -36,7 +36,7 @@ struct AnalyticsView: View {
 
     private var subjectTrackers: [NestTracker] {
         guard let subject else { return [] }
-        return store.trackers(for: subject)
+        return store.historicalTrackers(for: subject)
     }
 
     private var calendar: Calendar { .current }

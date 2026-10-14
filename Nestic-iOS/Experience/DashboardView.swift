@@ -198,6 +198,7 @@ struct DashboardView: View {
     @State private var quickLogError: String?
     @State private var quickLogDate: Date?
     @State private var quickLogSubjectID: UUID?
+    @State private var routineToLog: NestRoutine?
     @State private var showRoutineEditor = false
     @State private var editingRoutine: NestRoutine?
     @State private var deletingRoutine: NestRoutine?
@@ -278,6 +279,7 @@ struct DashboardView: View {
         .sheet(isPresented: $showTutorial) { NesticTutorialView() }
         .sheet(isPresented: $showNests) { NestSwitcherSheet() }
         .sheet(isPresented: $showAdd) { AddSubjectSheet() }
+        .sheet(item: $routineToLog) { RoutineLogSheet(routine: $0) }
         .sheet(isPresented: $showRoutineEditor, onDismiss: { editingRoutine = nil }) {
             RoutineEditorSheet(routine: editingRoutine)
         }
@@ -488,14 +490,7 @@ struct DashboardView: View {
     }
 
     private func logRoutine(_ routine: NestRoutine) {
-        routineBusyID = routine.id
-        Task {
-            defer { routineBusyID = nil }
-            do {
-                try await store.logRoutine(routine)
-                UIImpactFeedbackGenerator(style: .light).impactOccurred()
-            } catch { routineError = error.localizedDescription }
-        }
+        routineToLog = routine
     }
 
     private func deleteRoutine(_ routine: NestRoutine) {
@@ -536,7 +531,7 @@ struct DashboardView: View {
     }
 
     private func quickLog(_ subject: NestSubject, tracker: NestTracker, date: Date) {
-        if tracker.valueType != .none {
+        if tracker.valueType != .none || tracker.groupName?.lowercased() == "medication" {
             logSelection = LogSelection(subject: subject, tracker: tracker, date: date)
             return
         }

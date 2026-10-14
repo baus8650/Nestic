@@ -120,11 +120,21 @@ struct ActivityView: View {
     @EnvironmentObject private var store: NesticStore
     @State private var search = ""
     @State private var subjectFilter: UUID?
+    @State private var showFilters = false
+    @State private var useDateRange = false
+    @State private var rangeStart = Calendar.current.startOfDay(for: Date())
+    @State private var rangeEnd = Date()
+    private var hasFilters: Bool { subjectFilter != nil || useDateRange }
+    private var filterSummary: String {
+        let subject = subjectFilter.flatMap { store.subject(id: $0)?.name } ?? "All subjects"
+        return useDateRange ? "\(subject) · \(rangeStart.formatted(date: .abbreviated, time: .shortened)) – \(rangeEnd.formatted(date: .abbreviated, time: .shortened))" : subject
+    }
     @State private var selectedEntry: NestEntry?
     @State private var error: String?
     private var filtered: [NestEntry] {
         store.entries.filter { entry in
             guard subjectFilter == nil || entry.entityId == subjectFilter else { return false }
+            guard !useDateRange || (entry.occurredAt >= rangeStart && entry.occurredAt <= rangeEnd) else { return false }
             guard !search.isEmpty else { return true }
             let subject = store.subject(id: entry.entityId)
             let tracker = store.tracker(id: entry.actionId)
@@ -145,8 +155,14 @@ struct ActivityView: View {
                     Text("\(matches.count) updates").font(.caption).foregroundStyle(.secondary)
                 }.listRowBackground(Color.clear).listRowInsets(EdgeInsets(top: 10, leading: 0, bottom: 10, trailing: 0))
             }
+            if hasFilters {
+                Section {
+                    Text(filterSummary).font(.caption).foregroundStyle(.secondary)
+                    Button("Clear filters") { subjectFilter = nil; useDateRange = false }
+                }
+            }
             if matches.isEmpty {
-                EmptyNestView(symbol: search.isEmpty ? "clock.arrow.circlepath" : "magnifyingglass", title: search.isEmpty ? "Your shared story starts here" : "No matching updates", message: search.isEmpty ? "Log something from Home and it will appear in your nest’s activity." : "Try another search or change the filter.")
+                EmptyNestView(symbol: search.isEmpty && !hasFilters ? "clock.arrow.circlepath" : "magnifyingglass", title: search.isEmpty && !hasFilters ? "Your shared story starts here" : "No matching updates", message: search.isEmpty && !hasFilters ? "Log something from Home and it will appear in your nest’s activity." : "Try another search, subject, or date range.")
                     .listRowBackground(Color.clear)
             }
             ForEach(days, id: \.self) { day in
@@ -180,24 +196,72 @@ struct ActivityView: View {
             }
         }.formStyle().navigationTitle("Activity")
             .searchable(text: $search, prompt: "Search names, trackers, or notes")
-            .onChange(of: store.selectedNestID) { _, _ in subjectFilter = nil; selectedEntry = nil }
+            .onChange(of: store.selectedNestID) { _, _ in subjectFilter = nil; useDateRange = false; selectedEntry = nil }
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
-                    Menu {
-                        Button("Everything") { subjectFilter = nil }
-                        ForEach(store.subjects) { subject in
-                            Button("\(subject.emoji) \(subject.name)") { subjectFilter = subject.id }
-                        }
-                    } label: { Image(systemName: subjectFilter == nil ? "line.3.horizontal.decrease.circle" : "line.3.horizontal.decrease.circle.fill") }
-                        .accessibilityLabel("Filter activity")
+                    Button { showFilters = true } label: {
+                        Label("Filters", systemImage: hasFilters ? "line.3.horizontal.decrease.circle.fill" : "line.3.horizontal.decrease.circle")
+                    }
+                    .accessibilityLabel("Filter activity by subject, date, and time")
                 }
             }
             .refreshable { do { try await store.refresh() } catch { self.error = error.localizedDescription } }
             .sheet(item: $selectedEntry) { EntryDetailSheet(entry: $0) }
+            .sheet(isPresented: $showFilters) {
+                NavigationStack {
+                    Form {
+                        Section("Subject") {
+                            Picker("Show activity for", selection: $subjectFilter) {
+                                Text("All subjects").tag(UUID?.none)
+                                ForEach(store.subjects) { subject in
+                                    Text("\(subject.emoji) \(subject.name)").tag(Optional(subject.id))
+                                }
+                            }
+                        }
+                        Section {
+                            Toggle("Filter by date and time", isOn: $useDateRange)
+                            if useDateRange {
+                                DatePicker("From", selection: $rangeStart, in: ...rangeEnd, displayedComponents: [.date, .hourAndMinute])
+                                DatePicker("Through", selection: $rangeEnd, in: rangeStart..., displayedComponents: [.date, .hourAndMinute])
+                            }
+                        } header: { Text("Date range") } footer: {
+                            Text("Includes updates recorded between these times, using your device’s local time zone. Older activity loads automatically for the selected range.")
+                        }
+                        Button("Clear filters") { subjectFilter = nil; useDateRange = false }
+                    }
+                    .formStyle()
+                    .navigationTitle("Activity filters")
+                    .navigationBarTitleDisplayMode(.inline)
+                    .toolbar {
+                        ToolbarItem(placement: .confirmationAction) {
+                            Button("Done") {
+                                showFilters = false
+                                loadFilteredHistory()
+                            }
+                        }
+                    }
+                }
+            }
             .alert("Couldn’t refresh", isPresented: Binding(get: { error != nil }, set: { if !$0 { error = nil } })) {
                 Button("OK") { error = nil }
             } message: { Text(error ?? "") }
     }
+    private func loadFilteredHistory() {
+        guard useDateRange else { return }
+        let nestID = store.selectedNestID
+        let start = rangeStart
+        Task {
+            do {
+                while store.selectedNestID == nestID && useDateRange && store.hasMoreEntries && !store.isLoadingMoreEntries,
+                      let oldest = store.entries.last?.occurredAt, oldest >= start {
+                    let count = store.entries.count
+                    try await store.loadOlderEntries()
+                    if store.entries.count == count { break }
+                }
+            } catch { self.error = error.localizedDescription }
+        }
+    }
+
     private func dayLabel(_ day: Date) -> String {
         if Calendar.current.isDateInToday(day) { return "Today" }
         if Calendar.current.isDateInYesterday(day) { return "Yesterday" }
@@ -230,7 +294,7 @@ struct EntryDetailSheet: View {
         currentEntry.actorUserId == store.currentUser?.id || store.canManageNest
     }
     private var tracker: NestTracker? {
-        store.trackers.first { $0.id == currentEntry.actionId }
+        store.allTrackers.first { $0.id == currentEntry.actionId }
     }
     private var isHealthEvent: Bool { tracker?.valueType == .health }
     var body: some View {
@@ -316,10 +380,10 @@ struct EntryDetailSheet: View {
                         }
                     }
                     Button("Cancel", role: .cancel) { confirmDelete = false }
-                } message: { Text("Everyone in your nest will see the updated history.") }
+                } message: { Text("This permanently deletes this update, its notes, and attached photos. The tracker and its other updates stay. Anyone with access to this tracker will see the change. This cannot be undone.") }
                 .sheet(item: $editingEntry) { editedEntry in
                     if let subject = store.subjects.first(where: { $0.id == editedEntry.entityId }),
-                       let tracker = store.trackers.first(where: { $0.id == editedEntry.actionId }) {
+                       let tracker = store.allTrackers.first(where: { $0.id == editedEntry.actionId }) {
                         LogEntrySheet(subject: subject, tracker: tracker, editingEntry: editedEntry)
                     } else {
                         Text("This tracker is no longer available.")

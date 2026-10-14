@@ -57,8 +57,54 @@ struct NesticSiriRecordTrackerIntent: AppIntent {
     }
 }
 
+struct NesticSiriRoutineEntity: AppEntity, Hashable, Sendable {
+    static var typeDisplayRepresentation = TypeDisplayRepresentation(name: "Routine")
+    static var defaultQuery = Query()
+    let id: String
+    let name: String
+    var displayRepresentation: DisplayRepresentation { DisplayRepresentation(title: "\(name)") }
+    struct Query: EntityStringQuery {
+        func entities(for identifiers: [String]) async throws -> [NesticSiriRoutineEntity] { await siriRoutines().filter { identifiers.contains($0.id) } }
+        func suggestedEntities() async throws -> [NesticSiriRoutineEntity] { await siriRoutines() }
+        func entities(matching string: String) async throws -> [NesticSiriRoutineEntity] { await siriRoutines().filter { $0.name.localizedCaseInsensitiveContains(string) } }
+    }
+}
+struct NesticSiriRecordRoutineIntent: AppIntent {
+    static var title: LocalizedStringResource { "Record Routine" }
+    static var description: IntentDescription { "Record every saved tracker in a Nestic routine." }
+    static var openAppWhenRun: Bool { false }
+    @Parameter(title: "Routine") var routine: NesticSiriRoutineEntity
+    @Parameter(title: "Recorded at") var recordedAt: Date?
+    static var parameterSummary: some ParameterSummary { Summary("Record \(\.$routine)") { \.$recordedAt } }
+    func perform() async throws -> some IntentResult & ProvidesDialog {
+        let message = await recordSiriRoutine(id: routine.id, date: recordedAt ?? Date())
+        return .result(dialog: IntentDialog(stringLiteral: message))
+    }
+}
+@MainActor private func siriRoutineStore() async -> NesticStore {
+    let reminders = NesticReminderStore()
+    let store = NesticWidgetActionStore.store ?? NesticStore(reminderStore: reminders)
+    await store.start()
+    let subscription = NesticSubscriptionStore()
+    await subscription.refreshAccessForBackgroundAction(manualPro: store.currentUser?.manualPro == true)
+    store.setPredictionAccess(subscription.hasPredictionAccess)
+    return store
+}
+@MainActor private func siriRoutines() async -> [NesticSiriRoutineEntity] {
+    let store = await siriRoutineStore()
+    guard store.hasRoutineAccess else { return [] }
+    return store.routines.map { NesticSiriRoutineEntity(id: $0.id.uuidString, name: $0.name) }
+}
+@MainActor private func recordSiriRoutine(id: String, date: Date) async -> String {
+    let store = await siriRoutineStore()
+    guard let id = UUID(uuidString: id), let routine = store.routines.first(where: { $0.id == id }) else { return "I couldn’t find that routine. Open Nestic and refresh your nest." }
+    do { try await store.logRoutine(routine, date: date); return "Recorded \(routine.name)." }
+    catch { return "I couldn’t record \(routine.name): \(error.localizedDescription)" }
+}
+
 struct NesticSiriShortcuts: AppShortcutsProvider {
     static var appShortcuts: [AppShortcut] {
+        AppShortcut(intent: NesticSiriRecordRoutineIntent(), phrases: ["Run \(\.$routine) in \(.applicationName)", "Record \(\.$routine) in \(.applicationName)", "Log \(\.$routine) in \(.applicationName)"], shortTitle: "Record a routine", systemImageName: "checklist")
         AppShortcut(
             intent: NesticSiriRecordTrackerIntent(),
             phrases: [
@@ -90,7 +136,9 @@ private func nesticSiriTargets() async -> [NesticSiriTargetEntity] {
 
 @MainActor
 private func recordNesticSiriTarget(subjectID: UUID, trackerID: UUID) async -> String {
-    let store = NesticStore()
+    let reminders = NesticReminderStore()
+    let store = NesticStore(reminderStore: reminders)
+    await store.start()
     guard let subject = store.subjects.first(where: { $0.id == subjectID }),
           let tracker = store.trackers.first(where: { $0.id == trackerID }),
           subject.pinnedActionIDs.contains(trackerID) else {

@@ -209,6 +209,7 @@ struct NestTracker: Codable, Identifiable, Hashable, Sendable {
     var groupName: String? = nil
     var privateOwnerId: UUID? = nil
     var allowedMemberIDs: [UUID]? = nil
+    var isArchived: Bool? = nil
     var privacyLabel: String { isPrivate ? ((allowedMemberIDs ?? []).isEmpty ? "Only me" : "Selected members") : "Everyone" }
     func canContribute(to target: NestTracker) -> Bool {
         guard let owner = privateOwnerId else { return true }
@@ -217,7 +218,7 @@ struct NestTracker: Codable, Identifiable, Hashable, Sendable {
     }
     var isPrivate: Bool { privateOwnerId != nil }
     enum CodingKeys: String, CodingKey {
-        case id, nestId, name, valueType, unit, symbol, color, groupName, privateOwnerId, allowedMemberIDs
+        case id, nestId, name, valueType, unit, symbol, color, groupName, privateOwnerId, allowedMemberIDs, isArchived
     }
 
     init(id: UUID, nestId: UUID, name: String, valueType: NestValueType, unit: String? = nil, symbol: String? = nil, color: String? = nil, groupName: String? = nil, privateOwnerId: UUID? = nil, allowedMemberIDs: [UUID]? = nil) {
@@ -245,6 +246,7 @@ struct NestTracker: Codable, Identifiable, Hashable, Sendable {
         groupName = try container.decodeIfPresent(String.self, forKey: .groupName)
         privateOwnerId = try container.decodeIfPresent(UUID.self, forKey: .privateOwnerId)
         allowedMemberIDs = try container.decodeIfPresent([UUID].self, forKey: .allowedMemberIDs)
+        isArchived = try container.decodeIfPresent(Bool.self, forKey: .isArchived)
     }
 }
 

@@ -433,6 +433,9 @@ struct NestSharedForecastUpsert: Encodable {
 
 #if !os(watchOS)
 struct NestReminderResponse: Decodable {
+    let routineID: UUID?
+    let recurrenceDays: Int?
+    let startFromFirstTracking: Bool?
     let id: UUID
     let nestId: UUID
     let subjectId: UUID
@@ -453,6 +456,7 @@ struct NestReminderResponse: Decodable {
     let lastDoseAt: Date?
     let pillsTaken: Double?
     let notificationsEnabled: Bool
+    let deliveryMode: String?
 
     func reminder() -> NesticReminder {
         NesticReminder(id: id, nestID: nestId, subjectID: subjectId, subjectName: subjectName,
@@ -462,7 +466,7 @@ struct NestReminderResponse: Decodable {
                        anchorDate: anchorDate, hour: hour, minute: minute,
                        enabled: notificationsEnabled, createdByName: createdByName,
                        isShared: true, intervalHours: intervalHours, totalPills: totalPills,
-                       lastDoseAt: lastDoseAt, pillsTaken: pillsTaken)
+                       lastDoseAt: lastDoseAt, pillsTaken: pillsTaken, deliveryMode: deliveryMode, routineID: routineID, recurrenceDays: recurrenceDays, startFromFirstTracking: startFromFirstTracking)
     }
 }
 #endif
