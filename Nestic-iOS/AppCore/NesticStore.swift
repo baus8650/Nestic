@@ -998,16 +998,16 @@ final class NesticStore: ObservableObject {
         careLinkSession = session
     }
 
-    func createSubject(name: String, kind: NestSubjectKind, emoji: String, photoData: String? = nil, trackerTemplates: [NestTrackerTemplate]) async throws {
+    func createSubject(name: String, kind: NestSubjectKind, emoji: String, photoData: String? = nil, profile: NesticSubjectProfileDraft? = nil, trackerTemplates: [NestTrackerTemplate]) async throws {
         let nestID = try requireNest()
         guard canLog else { throw NesticError.message("You have view-only access to this nest.") }
         let name = try nonempty(name, label: "Name")
         let emoji = emoji.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? kind.emoji : String(emoji.prefix(4))
-        let metadata = ["emoji": emoji]
+        let metadata = try (profile ?? NesticSubjectProfileDraft()).metadata(merging: ["emoji": emoji])
         var subject: NestSubject
         let requestGeneration = generation
         if isDemo {
-            subject = .init(id: UUID(), nestId: nestID, name: name, kind: kind, emoji: emoji, photoData: photoData)
+            subject = .init(id: UUID(), nestId: nestID, name: name, kind: kind, emoji: emoji, photoData: photoData, metadata: metadata)
         } else {
             struct Request: Encodable { let kind: NestSubjectKind; let name: String; let metadata: [String: String] }
             let response: NestEntityResponse = try await api().post("nests/\(nestID)/entities", body: Request(kind: kind, name: name, metadata: metadata))
@@ -1040,9 +1040,25 @@ final class NesticStore: ObservableObject {
         }
     }
 
+    func updateSubjectProfile(_ subject: NestSubject, profile: NesticSubjectProfileDraft) async throws {
+        guard canManageNest else { throw NesticError.message("Only a nest owner or admin can edit subject details.") }
+        let metadata = try profile.metadata(merging: (subject.metadata ?? [:]).merging(["emoji": subject.emoji]) { _, new in new })
+        var updated = subject
+        if !isDemo {
+            let requestGeneration = generation
+            struct Request: Encodable { let metadata: [String: String]; let replaceProfileDetails = true }
+            let response: NestEntityResponse = try await api().patch("entities/\(subject.id)", body: Request(metadata: metadata))
+            try checkGeneration(requestGeneration)
+            updated = response.subject(pins: subject.pinnedActionIDs)
+            updated.photoData = subject.photoData
+        } else { updated.metadata = metadata }
+        if let index = subjects.firstIndex(where: { $0.id == subject.id }) { subjects[index] = updated }
+        persist()
+    }
+
     func updateSubjectPhoto(_ subject: NestSubject, photoData: String?) async throws {
         guard canManageNest else { throw NesticError.message("Only a nest owner or admin can change subject photos.") }
-        let metadata = ["emoji": subject.emoji]
+        let metadata = (subject.metadata ?? [:]).merging(["emoji": subject.emoji]) { _, new in new }
         let requestGeneration = generation
         let updated: NestSubject
         if isDemo {

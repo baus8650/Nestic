@@ -214,7 +214,7 @@ struct NestEntityResponse: Decodable {
                      emoji: metadata?["emoji"] ?? kind.emoji,
                      pinnedActionIDs: resolvedPins,
                      photoData: metadata?["photoData"],
-                     photoURL: imageURL)
+                     photoURL: imageURL, metadata: metadata)
     }
 }
 

@@ -159,6 +159,7 @@ struct AddSubjectSheet: View {
     @State private var kind: NestSubjectKind = .pet
     @State private var emoji = "🐶"
     @State private var photoData: String?
+    @State private var profile = NesticSubjectProfileDraft()
     @State private var useStarterTrackers = true
     @State private var busy = false
     @State private var error: String?
@@ -207,6 +208,7 @@ struct AddSubjectSheet: View {
                 }, header: {
                     Text("The basics")
                 })
+                SubjectProfileFields(draft: $profile)
                 Section {
                     if kind != .custom {
                         Toggle("Add starter trackers", isOn: $useStarterTrackers)
@@ -234,7 +236,7 @@ struct AddSubjectSheet: View {
                                 defer { busy = false }
                                 do {
                                     try await store.createSubject(name: name, kind: kind, emoji: emoji.isEmpty ? kind.emoji : emoji,
-                                                                  photoData: photoData, trackerTemplates: templates)
+                                                                  photoData: photoData, profile: profile, trackerTemplates: templates)
                                     dismiss()
                                 } catch { self.error = error.localizedDescription }
                             }
@@ -457,6 +459,7 @@ struct SubjectDetailView: View {
     @State private var deletingEntryBusy = false
     @State private var entryError: String?
     @State private var showPhotoEditor = false
+    @State private var showProfileEditor = false
     @State private var showProPaywall = false
     @State private var routineToLog: NestRoutine?
     @State private var showRoutineEditor = false
@@ -756,6 +759,10 @@ struct SubjectDetailView: View {
             VStack(alignment: .leading, spacing: 6) {
                 Text(currentSubject.name)
                     .font(.system(size: isWideLayout ? 40 : 34, weight: .bold, design: .rounded))
+                SubjectProfileSummary(subject: currentSubject)
+                if store.canManageNest {
+                    Button("Edit details") { showProfileEditor = true }.font(.caption).buttonStyle(.borderless)
+                }
             }
         }
         .padding(.horizontal, isWideLayout ? 34 : 22)
@@ -880,6 +887,7 @@ struct SubjectDetailView: View {
             }
             .sheet(isPresented: $showAdd) { AddTrackerSheet(subject: currentSubject) }
             .sheet(isPresented: $showAddMedication) { AddTrackerSheet(subject: currentSubject, initialGroupName: "Medication") }
+            .sheet(isPresented: $showProfileEditor) { SubjectProfileSheet(subject: currentSubject) }
             .sheet(isPresented: $showPhotoEditor) { SubjectPhotoEditor(subject: currentSubject) }
             .sheet(item: $routineToLog) { RoutineLogSheet(routine: $0) }
         .sheet(isPresented: $showRoutineEditor, onDismiss: { editingRoutine = nil }) {

@@ -140,6 +140,7 @@ struct NestSubject: Codable, Identifiable, Hashable, Sendable {
     var photoData: String? = nil
     /// Server-side R2 reference. `photoData` is only a local cache for rendering.
     var photoURL: String? = nil
+    var metadata: [String: String]? = nil
 }
 
 enum NestValueType: String, Codable, CaseIterable, Identifiable, Sendable {
